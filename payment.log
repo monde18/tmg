@@ -1,0 +1,20 @@
+Received request: citation_id=30, amount=500Received request: citation_id=29, amount=500Received request: citation_id=31, amount=500Received request: citation_id=30, amount=500Received request: citation_id=32, amount=1000Received request: citation_id=33, amount=1000Received request: citation_id=37, amount=500Received request: citation_id=35, amount=1000Received request: citation_id=38, amount=300Received request: citation_id=38, amount=500Received request: citation_id=36, amount=1000Received request: citation_id=38, amount=500Raw POST amount: 500Received request: citation_id=38, amount=500Citation status: UnpaidViolation count: 2, Total fine: 1000Error: Payment amount is less than the total fine of ₱1000.Raw POST amount: 500Received request: citation_id=38, amount=500Citation status: UnpaidPayment processing error: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'fine' in 'field list'Raw POST amount: 500Received request: citation_id=38, amount=500Citation status: UnpaidPayment processing error: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'fine' in 'field list'Raw POST amount: 500Received request: citation_id=38, amount=500Citation status: UnpaidPayment processing error: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'fine' in 'field list'Raw POST amount: 500Received request: citation_id=38, amount=500Citation status: UnpaidViolation count: 2, Total fine: 1000Error: Payment amount is less than the total fine of ₱1000.Raw POST amount: 1000Received request: citation_id=38, amount=1000Citation status: UnpaidViolation count: 2, Total fine: 1000Raw POST amount: 1000Received request: citation_id=39, amount=1000Citation status: UnpaidPayment processing error: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'fine' in 'field list'Received request: citation_id=39, amount=1000Received request: citation_id=38, amount=1000Received request: citation_id=5368, amount=500Received request: citation_id=19868, amount=500Received request: citation_id=22732, amount=500Received request: citation_id=22732, amount=500Received request: citation_id=22746, amount=2500Received request: citation_id=22745, amount=500Received request: citation_id=22733, amount=500Received request: citation_id=22748, amount=4000Received request: citation_id=22745, amount=0Received request: citation_id=22749, amount=4000Payment request: citation_id=22750, amount=500Payment request: citation_id=30944, amount=500Payment request: citation_id=37257, amount=200Payment request: citation_id=37254, amount=3000Received request: citation_id=37258, amount=500Received request: citation_id=37255, amount=150Received request: citation_id=37256, amount=150Received request: citation_id=37260, amount=700Received request: citation_id=37259, amount=500Received request: citation_id=37268, amount=500Received request: citation_id=37271, amount=500, violation_ids=Array
+(
+    [0] => 7
+)
+Received request: citation_id=37266, amount=1000, violation_ids=Array
+(
+    [0] => 2
+)
+Received request: citation_id=37275, amount=2500, violation_ids=Array
+(
+    [0] => 12
+)
+Received request: citation_id=37274, amount=1500, violation_ids=Array
+(
+    [0] => 11
+)
+Received request: citation_id=37276, amount=150, violation_ids=Array
+(
+    [0] => 13
+)
