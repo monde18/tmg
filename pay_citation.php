@@ -41,12 +41,12 @@ try {
                     WHEN 1 THEN vt.fine_amount_1
                     WHEN 2 THEN vt.fine_amount_2
                     WHEN 3 THEN vt.fine_amount_3
-                    ELSE 500.00
-                END, 500.00
+                    ELSE 150.00
+                END, 150.00
             )
         ), 0) AS total_fine
         FROM violations v
-        LEFT JOIN violation_types vt ON UPPER(v.violation_type) = UPPER(vt.violation_type)
+        LEFT JOIN violation_types vt ON v.violation_type = vt.violation_type
         WHERE v.citation_id = ? AND v.violation_id IN ($placeholders)
     ");
     $stmt->execute(array_merge([$citation_id], $violation_ids));
@@ -61,7 +61,7 @@ try {
     }
 
     // Generate unique reference number (PAY-YYYYMMDD-HHMM-XXXX)
-    $datePart = date('Ymd-Hi', strtotime('04:25 PM PST')); // Current date and time
+    $datePart = date('Ymd-Hi', strtotime('04:25 PM PST')); // Adjust to server time if needed
     $maxAttempts = 10;
     $attempt = 0;
     do {
@@ -77,7 +77,15 @@ try {
         throw new Exception("Unable to generate unique reference number.");
     }
 
-    // Update citation
+    // Update violations payment status
+    $stmt = $conn->prepare("
+        UPDATE violations 
+        SET payment_status = 'Paid'
+        WHERE violation_id IN ($placeholders) AND payment_status = 'Unpaid'
+    ");
+    $stmt->execute($violation_ids);
+
+    // Update citation payment status
     $stmt = $conn->prepare("
         UPDATE citations 
         SET payment_status = CASE 
@@ -91,16 +99,9 @@ try {
     ");
     $stmt->execute([$citation_id, $amount, $referenceNumber, $citation_id]);
 
-    if ($stmt->rowCount() === 0) {
+    if ($stmt->rowCount() === 0 && $conn->query("SELECT COUNT(*) FROM violations WHERE citation_id = $citation_id AND payment_status = 'Unpaid'")->fetchColumn() == 0) {
         throw new Exception("No unpaid or partially paid citations found or payment already processed.");
     }
-
-    // Update violations (optional, if tracking individual payment status)
-    // Uncomment and adjust if you add payment_status to violations table
-    /*
-    $stmt = $conn->prepare("UPDATE violations SET payment_status = 'Paid' WHERE violation_id IN ($placeholders) AND payment_status = 'Unpaid'");
-    $stmt->execute($violation_ids);
-    */
 
     $conn->commit();
 

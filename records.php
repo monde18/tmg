@@ -523,7 +523,6 @@ require_once 'config.php';
       }
     }
 
-    /* Enhanced Pagination Styles */
     .pagination-container {
       display: flex;
       justify-content: space-between;
@@ -727,9 +726,8 @@ require_once 'config.php';
             <li><label class="dropdown-item"><input type="checkbox" class="column-toggle" data-column="5" checked> Apprehension Date</label></li>
             <li><label class="dropdown-item"><input type="checkbox" class="column-toggle" data-column="6" checked> Violations</label></li>
             <li><label class="dropdown-item"><input type="checkbox" class="column-toggle" data-column="7" checked> Payment Status</label></li>
-            <li><label class="dropdown-item"><input type="checkbox" class="column-toggle" data-column="8" checked> Reference Number</label></li>
-            <li><label class="dropdown-item"><input type="checkbox" class="column-toggle" data-column="9" checked> Archiving Reason</label></li>
-            <li><label class="dropdown-item"><input type="checkbox" class="column-toggle" data-column="10" checked> Actions</label></li>
+            <li><label class="dropdown-item"><input type="checkbox" class="column-toggle" data-column="8" checked> Archiving Reason</label></li>
+            <li><label class="dropdown-item"><input type="checkbox" class="column-toggle" data-column="9" checked> Actions</label></li>
           </ul>
         </div>
       </div>
@@ -750,40 +748,41 @@ require_once 'config.php';
             $offset = ($page - 1) * $recordsPerPage;
             $search = isset($_GET['search']) ? trim($_GET['search']) : '';
 
-            // Main query with case-insensitive join to violation_types and default fine of 150
             $query = "
                 SELECT c.citation_id, c.ticket_number, 
-                       CONCAT(d.last_name, ', ', d.first_name, 
+                       COALESCE(CONCAT(d.last_name, ', ', d.first_name, 
                               IF(d.middle_initial != '', CONCAT(' ', d.middle_initial), ''), 
-                              IF(d.suffix != '', CONCAT(' ', d.suffix), '')) AS driver_name,
+                              IF(d.suffix != '', CONCAT(' ', d.suffix), '')), 'Unknown') AS driver_name,
                        d.driver_id, d.license_number, d.zone, d.barangay, d.municipality, d.province, 
-                       v.plate_mv_engine_chassis_no, v.vehicle_type, 
-                       c.apprehension_datetime, c.payment_status, c.reference_number,
-                       GROUP_CONCAT(CONCAT(vl.violation_type, ' (Offense ', vl.offense_count, ')') SEPARATOR ', ') AS violations,
+                       COALESCE(v.plate_mv_engine_chassis_no, 'N/A') AS plate_mv_engine_chassis_no, 
+                       COALESCE(v.vehicle_type, 'N/A') AS vehicle_type, 
+                       c.apprehension_datetime, c.payment_status,
+                       GROUP_CONCAT(CONCAT(COALESCE(vl.violation_type, 'Unknown'), ' (Offense ', COALESCE(vl.offense_count, 1), ')') SEPARATOR ', ') AS violations,
                        vl2.violation_id IS NOT NULL AS is_tro,
                        r.remark_text AS archiving_reason,
                        COALESCE(SUM(
-                           CASE vl.offense_count
-                               WHEN 1 THEN vt.fine_amount_1
-                               WHEN 2 THEN vt.fine_amount_2
-                               WHEN 3 THEN vt.fine_amount_3
-                               ELSE 150.00 -- Default fine set to 150 pesos
+                           CASE COALESCE(vl.offense_count, 1)
+                               WHEN 1 THEN COALESCE(vt.fine_amount_1, 200.00)
+                               WHEN 2 THEN COALESCE(vt.fine_amount_2, 200.00)
+                               WHEN 3 THEN COALESCE(vt.fine_amount_3, 200.00)
+                               ELSE 200.00
                            END
                        ), 0) AS total_fine
                 FROM citations c
-                JOIN drivers d ON c.driver_id = d.driver_id
-                JOIN vehicles v ON c.vehicle_id = v.vehicle_id
+                LEFT JOIN drivers d ON c.driver_id = d.driver_id
+                LEFT JOIN vehicles v ON c.vehicle_id = v.vehicle_id
                 LEFT JOIN violations vl ON c.citation_id = vl.citation_id
-                LEFT JOIN violation_types vt ON UPPER(vl.violation_type) = UPPER(vt.violation_type)
-                LEFT JOIN violations vl2 ON vl2.citation_id = c.citation_id AND UPPER(vl2.violation_type) = 'TRAFFIC RESTRICTION ORDER VIOLATION'
+                LEFT JOIN violation_types vt ON vl.violation_type = vt.violation_type
+                LEFT JOIN violations vl2 ON vl2.citation_id = c.citation_id AND vl2.violation_type = 'Traffic Restriction Order Violation'
                 LEFT JOIN remarks r ON c.citation_id = r.citation_id
                 WHERE c.is_archived = :is_archived
             ";
+            $params = [':is_archived' => $show_archived ? 1 : 0];
             if ($search) {
-                $query .= " AND (c.ticket_number LIKE :search OR CONCAT(d.last_name, ' ', d.first_name) LIKE :search)";
+                $query .= " AND (c.ticket_number LIKE :search OR COALESCE(CONCAT(d.last_name, ' ', d.first_name), '') LIKE :search)";
+                $params[':search'] = "%$search%";
             }
 
-            // Sort validation with whitelist
             $allowedSorts = ['apprehension_desc', 'apprehension_asc', 'ticket_asc', 'driver_asc', 'payment_asc', 'payment_desc'];
             $sort = isset($_GET['sort']) && in_array($_GET['sort'], $allowedSorts) ? $_GET['sort'] : 'apprehension_desc';
             switch ($sort) {
@@ -809,24 +808,17 @@ require_once 'config.php';
             }
 
             $query .= " LIMIT :limit OFFSET :offset";
+            $params[':limit'] = $recordsPerPage;
+            $params[':offset'] = $offset;
 
-            // Prepare and bind
             $stmt = $conn->prepare($query);
-            $stmt->bindValue(':is_archived', $show_archived ? 1 : 0, PDO::PARAM_INT);
-            if ($search) {
-                $stmt->bindValue(':search', "%$search%", PDO::PARAM_STR);
+            foreach ($params as $key => $value) {
+                $type = is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR;
+                $stmt->bindValue($key, $value, $type);
             }
-            $stmt->bindValue(':limit', $recordsPerPage, PDO::PARAM_INT);
-            $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
 
-            // Debugging
             error_log("Main Query: " . $query);
-            error_log("Main Params: " . print_r([
-                ':is_archived' => $show_archived ? 1 : 0,
-                ':search' => $search ? "%$search%" : null,
-                ':limit' => $recordsPerPage,
-                ':offset' => $offset
-            ], true));
+            error_log("Main Params: " . print_r($params, true));
 
             $stmt->execute();
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -846,7 +838,6 @@ require_once 'config.php';
                 echo "<th><i class='fas fa-clock me-2'></i>Apprehension Date</th>";
                 echo "<th><i class='fas fa-exclamation-triangle me-2'></i>Violations</th>";
                 echo "<th><i class='fas fa-money-bill-wave me-2'></i>Payment Status</th>";
-                echo "<th><i class='fas fa-info-circle me-2'></i>Reference Number</th>";
                 echo "<th><i class='fas fa-info-circle me-2'></i>Archiving Reason</th>";
                 echo "<th><i class='fas fa-cog me-2'></i>Actions</th>";
                 echo "</tr>";
@@ -858,12 +849,11 @@ require_once 'config.php';
                     echo "<td>" . htmlspecialchars($row['ticket_number']) . "</td>";
                     echo "<td><a href='#' class='driver-link text-primary' data-driver-id='" . $row['driver_id'] . "' data-zone='" . htmlspecialchars($row['zone'] ?? '') . "' data-barangay='" . htmlspecialchars($row['barangay'] ?? '') . "' data-municipality='" . htmlspecialchars($row['municipality'] ?? '') . "' data-province='" . htmlspecialchars($row['province'] ?? '') . "' aria-label='View Driver Details'>" . htmlspecialchars($row['driver_name']) . "</a></td>";
                     echo "<td>" . htmlspecialchars($row['license_number'] ?? '') . "</td>";
-                    echo "<td>" . htmlspecialchars($row['plate_mv_engine_chassis_no'] ?? '') . "</td>";
-                    echo "<td>" . htmlspecialchars($row['vehicle_type'] ?? '') . "</td>";
-                    echo "<td>" . ($row['apprehension_datetime'] ? htmlspecialchars($row['apprehension_datetime']) : 'N/A') . "</td>";
+                    echo "<td>" . htmlspecialchars($row['plate_mv_engine_chassis_no']) . "</td>";
+                    echo "<td>" . htmlspecialchars($row['vehicle_type']) . "</td>";
+                    echo "<td>" . ($row['apprehension_datetime'] ? htmlspecialchars(date('Y-m-d H:i', strtotime($row['apprehension_datetime']))) : 'N/A') . "</td>";
                     echo "<td>" . htmlspecialchars($row['violations'] ?? 'None') . "</td>";
-                    echo "<td>" . ($row['payment_status'] == 'Paid' ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>') . "</td>";
-                    echo "<td>" . htmlspecialchars($row['reference_number'] ?? 'N/A') . "</td>";
+                    echo "<td>" . ($row['payment_status'] == 'Paid' ? '<span class="badge bg-success">Paid</span>' : ($row['payment_status'] == 'Partially Paid' ? '<span class="badge bg-warning">Partially Paid</span>' : '<span class="badge bg-danger">Unpaid</span>')) . "</td>";
                     echo "<td>" . htmlspecialchars($row['archiving_reason'] ?? 'N/A') . "</td>";
                     echo "<td class='d-flex gap-2'>";
                     if (!$show_archived) {
@@ -874,7 +864,7 @@ require_once 'config.php';
                     $iconClass = $show_archived ? "fa-box-open" : "fa-archive";
                     echo "<button class='btn btn-sm btn-archive archive-btn' data-id='" . $row['citation_id'] . "' data-action='" . ($show_archived ? 0 : 1) . "' data-is-tro='" . ($row['is_tro'] ? '1' : '0') . "' aria-label='$actionText Citation'><i class='fas " . $iconClass . "'></i> $actionText</button>";
                     if ($row['payment_status'] == 'Unpaid' && !$show_archived) {
-                        echo "<a href='#' class='btn btn-sm btn-success btn-custom pay-now' data-citation-id='" . $row['citation_id'] . "' data-driver-id='" . $row['driver_id'] . "' data-zone='" . htmlspecialchars($row['zone'] ?? '') . "' data-barangay='" . htmlspecialchars($row['barangay'] ?? '') . "' data-municipality='" . htmlspecialchars($row['municipality'] ?? '') . "' data-province='" . htmlspecialchars($row['province'] ?? '') . "' aria-label='Pay Citation'><i class='fas fa-credit-card'></i> Pay Now</a>";
+                        echo "<a href='#' class='btn btn-sm btn-success btn-custom pay-now' data-citation-id='" . $row['citation_id'] . "' data-driver-id='" . $row['driver_id'] . "' data-zone='" . htmlspecialchars($row['zone'] ?? '') . "' data-barangay='" . htmlspecialchars($row['barangay'] ?? '') . "' data-municipality='" . htmlspecialchars($row['municipality'] ?? '') . "' data-province='" . htmlspecialchars($row['province'] ?? '') . "' data-license-number='" . htmlspecialchars($row['license_number'] ?? '') . "' aria-label='Pay Citation'><i class='fas fa-credit-card'></i> Pay Now</a>";
                     }
                     echo "</td>";
                     echo "</tr>";
@@ -895,27 +885,23 @@ require_once 'config.php';
           $conn = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4", DB_USER, DB_PASS);
           $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-          // Pagination count query
           $countQuery = "SELECT COUNT(DISTINCT c.citation_id) as total 
                         FROM citations c 
-                        JOIN drivers d ON c.driver_id = d.driver_id 
+                        LEFT JOIN drivers d ON c.driver_id = d.driver_id
                         WHERE c.is_archived = :is_archived";
+          $params = [':is_archived' => $show_archived ? 1 : 0];
           if ($search) {
-              $countQuery .= " AND (c.ticket_number LIKE :search OR CONCAT(d.last_name, ' ', d.first_name) LIKE :search)";
+              $countQuery .= " AND (c.ticket_number LIKE :search OR COALESCE(CONCAT(d.last_name, ' ', d.first_name), '') LIKE :search)";
+              $params[':search'] = "%$search%";
           }
 
           $countStmt = $conn->prepare($countQuery);
-          $countStmt->bindValue(':is_archived', $show_archived ? 1 : 0, PDO::PARAM_INT);
-          if ($search) {
-              $countStmt->bindValue(':search', "%$search%", PDO::PARAM_STR);
+          foreach ($params as $key => $value) {
+              $countStmt->bindValue($key, $value, PDO::PARAM_STR);
           }
 
-          // Debugging
           error_log("Count Query: " . $countQuery);
-          error_log("Count Params: " . print_r([
-              ':is_archived' => $show_archived ? 1 : 0,
-              ':search' => $search ? "%$search%" : null
-          ], true));
+          error_log("Count Params: " . print_r($params, true));
 
           $countStmt->execute();
           $totalRecords = $countStmt->fetch(PDO::FETCH_ASSOC)['total'];
@@ -923,28 +909,28 @@ require_once 'config.php';
       } catch(PDOException $e) {
           echo "<p class='debug'><i class='fas fa-exclamation-circle'></i> Error: " . htmlspecialchars($e->getMessage()) . "</p>";
           error_log("PDOException: " . $e->getMessage());
+          $totalRecords = 0;
+          $totalPages = 1;
       }
       $conn = null;
       ?>
-      </div>
+    </div>
 
-      <div class="pagination-container" id="paginationContainer" data-total-records="<?php echo $totalRecords; ?>" data-total-pages="<?php echo $totalPages; ?>" data-current-page="<?php echo $page; ?>" data-records-per-page="<?php echo $recordsPerPage; ?>">
-        <div class="pagination-info">
-          Showing <span id="recordStart"><?php echo $offset + 1; ?></span> to <span id="recordEnd"><?php echo min($offset + $recordsPerPage, $totalRecords); ?></span> of <span id="totalRecords"><?php echo $totalRecords; ?></span> citations
-        </div>
-        <nav aria-label="Page navigation">
-          <ul class="pagination" id="pagination"></ul>
-        </nav>
+    <div class="pagination-container" id="paginationContainer" data-total-records="<?php echo $totalRecords; ?>" data-total-pages="<?php echo $totalPages; ?>" data-current-page="<?php echo $page; ?>" data-records-per-page="<?php echo $recordsPerPage; ?>">
+      <div class="pagination-info">
+        Showing <span id="recordStart"><?php echo $offset + 1; ?></span> to <span id="recordEnd"><?php echo min($offset + $recordsPerPage, $totalRecords); ?></span> of <span id="totalRecords"><?php echo $totalRecords; ?></span> citations
       </div>
+      <nav aria-label="Page navigation">
+        <ul class="pagination" id="pagination"></ul>
+      </nav>
+    </div>
 
-      <div id="timelineView" style="display: none;">
-        <div class="timeline-container"></div>
-      </div>
+    <div id="timelineView" style="display: none;">
+      <div class="timeline-container"></div>
     </div>
   </div>
+  </div>
 
-  <!-- Modals -->
-  <!-- Archive Modal -->
   <div id="archiveModal" class="modal" role="dialog" aria-labelledby="archiveModalTitle" aria-hidden="true">
     <div class="modal-content">
       <span class="close" aria-label="Close Archive Modal">×</span>
@@ -956,7 +942,6 @@ require_once 'config.php';
     </div>
   </div>
 
-  <!-- Driver Information Modal -->
   <div id="driverInfoModal" class="modal" role="dialog" aria-labelledby="driverInfoTitle" aria-hidden="true">
     <div class="modal-content">
       <span class="close" aria-label="Close Driver Info Modal">×</span>
@@ -996,7 +981,6 @@ require_once 'config.php';
     </div>
   </div>
 
-  <!-- Payment Processing Modal -->
   <div id="paymentModal" class="modal" role="dialog" aria-labelledby="paymentModalTitle" aria-hidden="true">
     <div class="modal-content">
       <span class="close" aria-label="Close Payment Modal">×</span>
@@ -1015,6 +999,7 @@ require_once 'config.php';
         <table>
           <thead>
             <tr>
+              <th>Select</th>
               <th>Date/Time</th>
               <th>Offense</th>
               <th>Fine</th>
@@ -1042,429 +1027,403 @@ require_once 'config.php';
       </div>
     </div>
   </div>
-<script>
-  const csrfToken = "<?php echo $_SESSION['csrf_token']; ?>";
-  const showArchived = <?php echo $show_archived ? '1' : '0'; ?>;
 
-  document.addEventListener('DOMContentLoaded', () => {
-    const loadingDiv = document.getElementById('loading');
-    const citationTable = document.getElementById('citationTable');
-    const sidebar = document.getElementById('sidebar');
-    const sidebarToggle = document.getElementById('sidebarToggle');
-    const content = document.querySelector('.content');
-    const openModals = new Set();
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+  <script>
+    const csrfToken = "<?php echo $_SESSION['csrf_token']; ?>";
+const showArchived = <?php echo $show_archived ? '1' : '0'; ?>;
 
-    // Helper functions to show and hide modals
-    const showModal = (modal) => {
-      if (openModals.size > 0) return; // Prevent multiple modals
-      openModals.add(modal);
-      modal.style.display = 'flex';
-      setTimeout(() => modal.classList.add('show'), 10);
-    };
+document.addEventListener('DOMContentLoaded', () => {
+  const loadingDiv = document.getElementById('loading');
+  const citationTable = document.getElementById('citationTable');
+  const sidebar = document.getElementById('sidebar');
+  const sidebarToggle = document.getElementById('sidebarToggle');
+  const content = document.querySelector('.content');
 
-    const hideModal = (modal) => {
-      modal.classList.remove('show');
-      setTimeout(() => {
-        modal.style.display = 'none';
-        openModals.delete(modal);
-      }, 300);
-    };
+  const showModal = (modal) => {
+    if (document.querySelectorAll('.modal.show').length > 0) return; // Prevent multiple modals
+    modal.style.display = 'flex';
+    setTimeout(() => modal.classList.add('show'), 10);
+  };
 
-    // Sidebar toggle
-    sidebarToggle.addEventListener('click', () => {
-      sidebar.classList.toggle('open');
-      content.style.marginLeft = sidebar.classList.contains('open') ? '200px' : '0';
+  const hideModal = (modal) => {
+    modal.classList.remove('show');
+    setTimeout(() => modal.style.display = 'none', 300);
+  };
+
+  sidebarToggle.addEventListener('click', () => {
+    sidebar.classList.toggle('open');
+    content.style.marginLeft = sidebar.classList.contains('open') ? '200px' : '0';
+  });
+
+  loadingDiv.style.display = 'block';
+  citationTable.style.opacity = '0';
+  setTimeout(() => {
+    loadingDiv.style.display = 'none';
+    citationTable.style.opacity = '1';
+  }, 300);
+
+  const updateRowHoverEffects = () => {
+    const rows = document.querySelectorAll('.table tr');
+    rows.forEach(row => {
+      row.addEventListener('mouseenter', () => row.style.cursor = 'pointer');
+      row.addEventListener('mouseleave', () => row.style.cursor = 'default');
     });
+  };
+  updateRowHoverEffects();
 
-    // Lazy load table
+  const sortSelect = document.getElementById('sortSelect');
+  const searchInput = document.getElementById('searchInput');
+  const recordsPerPageSelect = document.getElementById('recordsPerPage');
+  const urlParams = new URLSearchParams(window.location.search);
+  const sortParam = urlParams.get('sort') || 'apprehension_desc';
+  const searchParam = urlParams.get('search') || '';
+  const recordsPerPage = urlParams.get('records_per_page') || '20';
+  sortSelect.value = sortParam;
+  searchInput.value = searchParam;
+  recordsPerPageSelect.value = recordsPerPage;
+  let currentPage = parseInt(urlParams.get('page')) || 1;
+
+  function fetchTableData(search, sort, showArchived, page, recordsPerPage) {
     loadingDiv.style.display = 'block';
     citationTable.style.opacity = '0';
-    setTimeout(() => {
+    const params = new URLSearchParams({
+      search: encodeURIComponent(search),
+      sort: encodeURIComponent(sort),
+      show_archived: encodeURIComponent(showArchived),
+      page: encodeURIComponent(page),
+      records_per_page: encodeURIComponent(recordsPerPage),
+      csrf_token: encodeURIComponent(csrfToken)
+    });
+    fetch('fetch_citations.php?' + params.toString(), {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    })
+    .then(response => {
+      if (!response.ok) {
+        return response.text().then(text => {
+          throw new Error(`HTTP error! Status: ${response.status}, Response: ${text}`);
+        });
+      }
+      return response.text();
+    })
+    .then(data => {
+      if (data.trim() === '') {
+        citationTable.innerHTML = "<p class='empty-state'><i class='fas fa-info-circle'></i> No citations found.</p>";
+      } else {
+        citationTable.innerHTML = data;
+      }
       loadingDiv.style.display = 'none';
       citationTable.style.opacity = '1';
-    }, 300);
-
-    // Table row hover effects
-    const updateRowHoverEffects = () => {
-      const rows = document.querySelectorAll('.table tr');
-      rows.forEach(row => {
-        row.addEventListener('mouseenter', () => {
-          row.style.cursor = 'pointer';
-        });
-        row.addEventListener('mouseleave', () => {
-          row.style.cursor = 'default';
-        });
-      });
-    };
-    updateRowHoverEffects();
-
-    // Fetch table data
-    const sortSelect = document.getElementById('sortSelect');
-    const searchInput = document.getElementById('searchInput');
-    const recordsPerPageSelect = document.getElementById('recordsPerPage');
-    const urlParams = new URLSearchParams(window.location.search);
-    const sortParam = urlParams.get('sort') || 'apprehension_desc';
-    const searchParam = urlParams.get('search') || '';
-    const recordsPerPage = urlParams.get('records_per_page') || '20';
-    sortSelect.value = sortParam;
-    searchInput.value = searchParam;
-    recordsPerPageSelect.value = recordsPerPage;
-    let currentPage = parseInt(urlParams.get('page')) || 1;
-
-    function fetchTableData(search, sort, showArchived, page, recordsPerPage) {
-      loadingDiv.style.display = 'block';
-      citationTable.style.opacity = '0';
-      const params = new URLSearchParams({
-        search: encodeURIComponent(search),
-        sort: encodeURIComponent(sort),
-        show_archived: encodeURIComponent(showArchived),
-        page: encodeURIComponent(page),
-        records_per_page: encodeURIComponent(recordsPerPage),
-        csrf_token: encodeURIComponent(csrfToken)
-      });
-      fetch('fetch_citations.php?' + params.toString(), {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-      })
-      .then(response => {
-        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-        return response.text();
-      })
-      .then(data => {
-        if (data.trim() === '') {
-          citationTable.innerHTML = "<p class='empty-state'><i class='fas fa-info-circle'></i> No citations found.</p>";
-        } else {
-          citationTable.innerHTML = data;
-        }
-        loadingDiv.style.display = 'none';
-        citationTable.style.opacity = '1';
-        updateRowHoverEffects();
-        attachEventListeners();
-        updatePagination(page, parseInt(recordsPerPage));
-      })
-      .catch(error => {
-        loadingDiv.style.display = 'none';
-        citationTable.innerHTML = `<p class='debug'><i class='fas fa-exclamation-circle'></i> Error: ${error.message}</p>`;
-        console.error('Fetch table error:', error);
-      });
-    }
-
-    // Initial data fetch
-    fetchTableData(searchParam, sortParam, showArchived, currentPage, recordsPerPage);
-
-    // Sort functionality
-    sortSelect.addEventListener('change', () => {
-      currentPage = 1;
-      fetchTableData(searchInput.value, sortSelect.value, showArchived, currentPage, recordsPerPageSelect.value);
+      updateRowHoverEffects();
+      attachEventListeners();
+      updatePagination(page, parseInt(recordsPerPage));
+    })
+    .catch(error => {
+      loadingDiv.style.display = 'none';
+      citationTable.innerHTML = `<p class='debug'><i class='fas fa-exclamation-circle'></i> Error: ${error.message}</p>`;
+      console.error('Fetch error:', error);
     });
+  }
 
-    // Search functionality
-    searchInput.addEventListener('input', debounce(() => {
-      currentPage = 1;
-      fetchTableData(searchInput.value, sortSelect.value, showArchived, currentPage, recordsPerPageSelect.value);
-    }, 500));
+  fetchTableData(searchParam, sortParam, showArchived, currentPage, recordsPerPage);
 
-    // Records per page functionality
-    recordsPerPageSelect.addEventListener('change', () => {
-      currentPage = 1;
-      fetchTableData(searchInput.value, sortSelect.value, showArchived, currentPage, recordsPerPageSelect.value);
-    });
+  sortSelect.addEventListener('change', () => {
+    currentPage = 1;
+    fetchTableData(searchInput.value, sortSelect.value, showArchived, currentPage, recordsPerPageSelect.value);
+  });
 
-    function debounce(func, wait) {
-      let timeout;
-      return function executedFunction(...args) {
-        const later = () => {
-          clearTimeout(timeout);
-          func(...args);
-        };
+  searchInput.addEventListener('input', debounce(() => {
+    currentPage = 1;
+    fetchTableData(searchInput.value, sortSelect.value, showArchived, currentPage, recordsPerPageSelect.value);
+  }, 500));
+
+  recordsPerPageSelect.addEventListener('change', () => {
+    currentPage = 1;
+    fetchTableData(searchInput.value, sortSelect.value, showArchived, currentPage, recordsPerPageSelect.value);
+  });
+
+  function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
         clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
+        func(...args);
       };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  }
+
+  function updatePagination(currentPage, recordsPerPage) {
+    const paginationContainer = document.getElementById('paginationContainer');
+    const pagination = document.getElementById('pagination');
+    const totalRecords = parseInt(paginationContainer.dataset.totalRecords);
+    const totalPages = parseInt(paginationContainer.dataset.totalPages);
+    const maxPagesToShow = 5;
+
+    pagination.innerHTML = '';
+
+    const prevLi = document.createElement('li');
+    prevLi.className = `page-item ${currentPage <= 1 ? 'disabled' : ''}`;
+    prevLi.innerHTML = `<a class="page-link" href="#" data-page="${currentPage - 1}" aria-label="Previous">«</a>`;
+    pagination.appendChild(prevLi);
+
+    let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+    let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+
+    if (endPage - startPage < maxPagesToShow - 1) {
+      startPage = Math.max(1, endPage - maxPagesToShow + 1);
     }
 
-    // Enhanced Pagination
-    function updatePagination(currentPage, recordsPerPage) {
-      const paginationContainer = document.getElementById('paginationContainer');
-      const pagination = document.getElementById('pagination');
-      const totalRecords = parseInt(paginationContainer.dataset.totalRecords);
-      const totalPages = parseInt(paginationContainer.dataset.totalPages);
-      const maxPagesToShow = 5;
+    if (startPage > 1) {
+      const firstPage = document.createElement('li');
+      firstPage.className = 'page-item';
+      firstPage.innerHTML = `<a class="page-link" href="#" data-page="1">1</a>`;
+      pagination.appendChild(firstPage);
 
-      pagination.innerHTML = '';
-
-      // Previous button
-      const prevLi = document.createElement('li');
-      prevLi.className = `page-item ${currentPage <= 1 ? 'disabled' : ''}`;
-      prevLi.innerHTML = `<a class="page-link" href="#" data-page="${currentPage - 1}" aria-label="Previous">«</a>`;
-      pagination.appendChild(prevLi);
-
-      // Page numbers with ellipsis
-      let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
-      let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
-
-      if (endPage - startPage < maxPagesToShow - 1) {
-        startPage = Math.max(1, endPage - maxPagesToShow + 1);
+      if (startPage > 2) {
+        const ellipsis = document.createElement('li');
+        ellipsis.className = 'page-item disabled';
+        ellipsis.innerHTML = `<span class="ellipsis">...</span>`;
+        pagination.appendChild(ellipsis);
       }
-
-      if (startPage > 1) {
-        const firstPage = document.createElement('li');
-        firstPage.className = 'page-item';
-        firstPage.innerHTML = `<a class="page-link" href="#" data-page="1">1</a>`;
-        pagination.appendChild(firstPage);
-
-        if (startPage > 2) {
-          const ellipsis = document.createElement('li');
-          ellipsis.className = 'page-item disabled';
-          ellipsis.innerHTML = `<span class="ellipsis">...</span>`;
-          pagination.appendChild(ellipsis);
-        }
-      }
-
-      for (let i = startPage; i <= endPage; i++) {
-        const pageLi = document.createElement('li');
-        pageLi.className = `page-item ${i === currentPage ? 'active' : ''}`;
-        pageLi.innerHTML = `<a class="page-link" href="#" data-page="${i}">${i}</a>`;
-        pagination.appendChild(pageLi);
-      }
-
-      if (endPage < totalPages) {
-        if (endPage < totalPages - 1) {
-          const ellipsis = document.createElement('li');
-          ellipsis.className = 'page-item disabled';
-          ellipsis.innerHTML = `<span class="ellipsis">...</span>`;
-          pagination.appendChild(ellipsis);
-        }
-
-        const lastPage = document.createElement('li');
-        lastPage.className = 'page-item';
-        lastPage.innerHTML = `<a class="page-link" href="#" data-page="${totalPages}">${totalPages}</a>`;
-        pagination.appendChild(lastPage);
-      }
-
-      // Next button
-      const nextLi = document.createElement('li');
-      nextLi.className = `page-item ${currentPage >= totalPages ? 'disabled' : ''}`;
-      nextLi.innerHTML = `<a class="page-link" href="#" data-page="${currentPage + 1}" aria-label="Next">»</a>`;
-      pagination.appendChild(nextLi);
-
-      // Update pagination info
-      const recordStart = (currentPage - 1) * recordsPerPage + 1;
-      const recordEnd = Math.min(currentPage * recordsPerPage, totalRecords);
-      document.getElementById('recordStart').textContent = recordStart;
-      document.getElementById('recordEnd').textContent = recordEnd;
-      document.getElementById('totalRecords').textContent = totalRecords;
-
-      // Attach event listeners to page links
-      document.querySelectorAll('.page-link').forEach(link => {
-        link.addEventListener('click', (e) => {
-          e.preventDefault();
-          const page = parseInt(link.getAttribute('data-page'));
-          if (page && !link.parentElement.classList.contains('disabled')) {
-            currentPage = page;
-            fetchTableData(searchInput.value, sortSelect.value, showArchived, currentPage, recordsPerPageSelect.value);
-          }
-        });
-      });
     }
 
-    // Initial pagination setup
-    updatePagination(currentPage, parseInt(recordsPerPageSelect.value));
+    for (let i = startPage; i <= endPage; i++) {
+      const pageLi = document.createElement('li');
+      pageLi.className = `page-item ${i === currentPage ? 'active' : ''}`;
+      pageLi.innerHTML = `<a class="page-link" href="#" data-page="${i}">${i}</a>`;
+      pagination.appendChild(pageLi);
+    }
 
-    // Archive modal handling
-    const archiveModal = document.getElementById('archiveModal');
-    const closeArchiveModal = document.getElementById('cancelArchive');
-    const confirmArchive = document.getElementById('confirmArchive');
-    const remarksReason = document.getElementById('remarksReason');
-    const errorMessage = document.getElementById('errorMessage');
-    let currentCitationId = null;
-    let currentAction = null;
-    let isTRO = null;
+    if (endPage < totalPages) {
+      if (endPage < totalPages - 1) {
+        const ellipsis = document.createElement('li');
+        ellipsis.className = 'page-item disabled';
+        ellipsis.innerHTML = `<span class="ellipsis">...</span>`;
+        pagination.appendChild(ellipsis);
+      }
 
-    const attachEventListeners = () => {
-      document.querySelectorAll('.archive-btn').forEach(button => {
-        button.addEventListener('click', () => {
-          currentCitationId = button.getAttribute('data-id');
-          currentAction = button.getAttribute('data-action');
-          isTRO = button.getAttribute('data-is-tro') === '1';
-          showModal(archiveModal);
-          remarksReason.value = '';
-          errorMessage.style.display = 'none';
-          remarksReason.focus();
-          if (isTRO) {
-            remarksReason.setAttribute('required', 'required');
-            document.querySelector('#archiveModal h2').textContent = 'Remarks Note: Reason for TRO Archiving';
-          } else {
-            remarksReason.removeAttribute('required');
-            document.querySelector('#archiveModal h2').textContent = 'Remarks Note: Reason for Archiving';
-          }
-        });
+      const lastPage = document.createElement('li');
+      lastPage.className = 'page-item';
+      lastPage.innerHTML = `<a class="page-link" href="#" data-page="${totalPages}">${totalPages}</a>`;
+      pagination.appendChild(lastPage);
+    }
+
+    const nextLi = document.createElement('li');
+    nextLi.className = `page-item ${currentPage >= totalPages ? 'disabled' : ''}`;
+    nextLi.innerHTML = `<a class="page-link" href="#" data-page="${currentPage + 1}" aria-label="Next">»</a>`;
+    pagination.appendChild(nextLi);
+
+    const recordStart = (currentPage - 1) * recordsPerPage + 1;
+    const recordEnd = Math.min(currentPage * recordsPerPage, totalRecords);
+    document.getElementById('recordStart').textContent = recordStart;
+    document.getElementById('recordEnd').textContent = recordEnd;
+    document.getElementById('totalRecords').textContent = totalRecords;
+
+    document.querySelectorAll('.page-link').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const page = parseInt(link.getAttribute('data-page'));
+        if (page && !link.parentElement.classList.contains('disabled')) {
+          currentPage = page;
+          fetchTableData(searchInput.value, sortSelect.value, showArchived, currentPage, recordsPerPageSelect.value);
+        }
+      });
+    });
+  }
+
+  updatePagination(currentPage, parseInt(recordsPerPageSelect.value));
+
+  const archiveModal = document.getElementById('archiveModal');
+  const closeArchiveModal = document.getElementById('cancelArchive');
+  const confirmArchive = document.getElementById('confirmArchive');
+  const remarksReason = document.getElementById('remarksReason');
+  const errorMessage = document.getElementById('errorMessage');
+  let currentCitationId = null;
+  let currentAction = null;
+  let isTRO = null;
+
+  const attachEventListeners = () => {
+    document.querySelectorAll('.archive-btn').forEach(button => {
+      button.addEventListener('click', () => {
+        currentCitationId = button.getAttribute('data-id');
+        currentAction = button.getAttribute('data-action');
+        isTRO = button.getAttribute('data-is-tro') === '1';
+        showModal(archiveModal);
+        remarksReason.value = '';
+        errorMessage.style.display = 'none';
+        remarksReason.focus();
+        if (isTRO) {
+          remarksReason.setAttribute('required', 'required');
+          document.querySelector('#archiveModal h2').textContent = 'Remarks Note: Reason for TRO Archiving';
+        } else {
+          remarksReason.removeAttribute('required');
+          document.querySelector('#archiveModal h2').textContent = 'Remarks Note: Reason for Archiving';
+        }
+      });
+    });
+
+    document.querySelectorAll('.driver-link').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const driverId = link.getAttribute('data-driver-id');
+        const zone = link.getAttribute('data-zone');
+        const barangay = link.getAttribute('data-barangay');
+        const municipality = link.getAttribute('data-municipality');
+        const province = link.getAttribute('data-province');
+
+        loadingDiv.style.display = 'block';
+        fetch(`fetch_payments.php?driver_id=${encodeURIComponent(driverId)}&csrf_token=${encodeURIComponent(csrfToken)}`, {
+          headers: { 'Accept': 'application/json' }
+        })
+          .then(response => {
+            if (!response.ok) {
+              return response.text().then(text => {
+                throw new Error(`HTTP error! Status: ${response.status}, Response: ${text}`);
+              });
+            }
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+              throw new Error(`Unexpected response format: ${contentType || 'unknown'}`);
+            }
+            return response.json();
+          })
+          .then(data => {
+            loadingDiv.style.display = 'none';
+            if (data.error) {
+              throw new Error(data.error);
+            }
+
+            const driver = data.rows[0] || {};
+            document.getElementById('licenseNumber').textContent = driver.license_number || 'N/A';
+            document.getElementById('driverName').textContent = driver.driver_name || 'N/A';
+            document.getElementById('driverAddress').textContent = `${zone ? zone + ', ' : ''}${barangay ? barangay + ', ' : ''}${municipality}, ${province}`;
+            const offenseTable = document.getElementById('offenseRecords');
+            offenseTable.innerHTML = '';
+            let totalFine = 0;
+            (data.rows[0]?.violations || '').split(', ').forEach(viol => {
+              const [type, count] = viol.match(/^(.*?)\s*\(Offense\s*(\d+)\)$/) || [viol, 1];
+              const fine = parseFloat(data.rows[0]?.total_fine) / (data.rows[0]?.violations.split(', ').length || 1) || 0;
+              totalFine += fine;
+              const row = document.createElement('tr');
+              row.innerHTML = `
+                <td>${data.rows[0]?.apprehension_datetime ? new Date(data.rows[0].apprehension_datetime).toLocaleString() : 'N/A'}</td>
+                <td>${type}</td>
+                <td>₱${fine.toFixed(2)}</td>
+                <td>${data.rows[0]?.payment_status || 'Unpaid'}</td>
+              `;
+              offenseTable.appendChild(row);
+            });
+            document.getElementById('totalFines').textContent = `₱${totalFine.toFixed(2)}`;
+            document.getElementById('totalFineDisplay').textContent = `₱${totalFine.toFixed(2)}`;
+
+            const modal = document.getElementById('driverInfoModal');
+            showModal(modal);
+          })
+          .catch(error => {
+            loadingDiv.style.display = 'none';
+            document.getElementById('licenseNumber').textContent = 'Error';
+            document.getElementById('offenseRecords').innerHTML = `<tr><td colspan="4">Error loading data: ${error.message}</td></tr>`;
+            console.error('Fetch error:', error);
+          });
       });
 
-      document.querySelectorAll('.driver-link').forEach(link => {
-        link.addEventListener('click', (e) => {
-          e.preventDefault();
-          const driverId = link.getAttribute('data-driver-id');
-          const zone = link.getAttribute('data-zone');
-          const barangay = link.getAttribute('data-barangay');
-          const municipality = link.getAttribute('data-municipality');
-          const province = link.getAttribute('data-province');
+    document.querySelectorAll('.pay-now').forEach(button => {
+      button.addEventListener('click', (e) => {
+        e.preventDefault();
+        const citationId = button.getAttribute('data-citation-id');
+        const driverId = button.getAttribute('data-driver-id');
+        const zone = button.getAttribute('data-zone');
+        const barangay = button.getAttribute('data-barangay');
+        const municipality = button.getAttribute('data-municipality');
+        const province = button.getAttribute('data-province');
+        const licenseNumber = button.getAttribute('data-license-number');
 
-          loadingDiv.style.display = 'block';
-          console.log('Fetching driver info for driverId:', driverId);
-          fetch(`get_driver_info.php?driver_id=${encodeURIComponent(driverId)}`, {
-            headers: { 'Accept': 'application/json' }
+        loadingDiv.style.display = 'block';
+        fetch(`fetch_payments.php?citation_id=${encodeURIComponent(citationId)}&driver_id=${encodeURIComponent(driverId)}&csrf_token=${encodeURIComponent(csrfToken)}`, {
+          headers: { 'Accept': 'application/json' }
+        })
+          .then(response => {
+            if (!response.ok) {
+              return response.text().then(text => {
+                throw new Error(`HTTP error! Status: ${response.status}, Response: ${text}`);
+              });
+            }
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+              throw new Error(`Unexpected response format: ${contentType || 'unknown'}`);
+            }
+            return response.json();
           })
-            .then(response => {
-              if (!response.ok) {
-                return response.text().then(text => {
-                  throw new Error(`HTTP error! Status: ${response.status}, Response: ${text}`);
-                });
-              }
-              const contentType = response.headers.get('content-type');
-              if (!contentType || !contentType.includes('application/json')) {
-                return response.text().then(text => {
-                  throw new Error(`Unexpected content type: ${contentType}, Response: ${text}`);
-                });
-              }
-              return response.json();
-            })
-            .then(data => {
-              if (data.status === 'error') {
-                throw new Error(data.error);
-              }
+          .then(data => {
+            loadingDiv.style.display = 'none';
+            if (data.error) {
+              throw new Error(data.error);
+            }
 
-              loadingDiv.style.display = 'none';
-              document.getElementById('licenseNumber').textContent = data.license_number || 'N/A';
-              document.getElementById('driverName').textContent = data.driver_name || 'N/A';
-              document.getElementById('driverAddress').textContent = `${zone ? zone + ', ' : ''}${barangay ? barangay + ', ' : ''}${municipality}, ${province}`;
-              const offenseTable = document.getElementById('offenseRecords');
-              offenseTable.innerHTML = '';
-              let totalFine = 0;
-              data.offenses.forEach(offense => {
-                const fine = parseFloat(offense.fine) || 150.00;
-                totalFine += fine;
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                  <td>${offense.date_time || 'N/A'}</td>
-                  <td>${offense.offense}${offense.offense_count ? ' (Offense ' + offense.offense_count + ')' : ''}</td>
-                  <td>₱${fine.toFixed(2)}</td>
-                  <td>${offense.status || 'N/A'}</td>
-                `;
-                offenseTable.appendChild(row);
-              });
-              document.getElementById('totalFines').textContent = `₱${totalFine.toFixed(2)}`;
-              document.getElementById('totalFineDisplay').textContent = `₱${totalFine.toFixed(2)}`;
+            document.getElementById('paymentLicenseNumber').textContent = licenseNumber || 'N/A';
+            document.getElementById('paymentDriverName').textContent = button.closest('tr').querySelector('.driver-link').textContent || 'N/A';
+            document.getElementById('paymentDriverAddress').textContent = `${zone ? zone + ', ' : ''}${barangay ? barangay + ', ' : ''}${municipality}, ${province}`;
+            
+            const offenseTable = document.getElementById('paymentOffenseRecords');
+            offenseTable.innerHTML = '';
+            let totalFine = 0;
+            let unpaidFine = 0;
 
-              const modal = document.getElementById('driverInfoModal');
-              showModal(modal);
-            })
-            .catch(error => {
-              loadingDiv.style.display = 'none';
-              document.getElementById('licenseNumber').textContent = 'Error';
-              document.getElementById('offenseRecords').innerHTML = `<tr><td colspan="4">Error loading driver data: ${error.message}</td></tr>`;
-              console.error('Driver info fetch error:', error.message);
-              alert(`Failed to load driver information: ${error.message}`);
+            data.offenses.forEach(offense => {
+              const fine = parseFloat(offense.fine) || 0;
+              totalFine += fine;
+              const isPaid = offense.payment_status === 'Paid';
+              if (!isPaid) unpaidFine += fine;
+              const row = document.createElement('tr');
+              row.innerHTML = `
+                <td><input type="checkbox" class="violation-checkbox" data-violation-id="${offense.violation_id}" data-fine="${fine}" ${isPaid ? 'disabled' : 'checked'}></td>
+                <td>${offense.date || 'N/A'}</td>
+                <td>${offense.violation_type || 'Unknown'} ${offense.offense_count ? '(Offense ' + offense.offense_count + ')' : ''}</td>
+                <td>₱${fine.toFixed(2)}</td>
+                <td>${isPaid ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>'}</td>
+              `;
+              offenseTable.appendChild(row);
             });
-        });
-      });
 
-      document.querySelectorAll('.pay-now').forEach(button => {
-        button.addEventListener('click', (e) => {
-          e.preventDefault();
-          const citationId = button.getAttribute('data-citation-id');
-          const driverId = button.getAttribute('data-driver-id');
-          const zone = button.getAttribute('data-zone');
-          const barangay = button.getAttribute('data-barangay');
-          const municipality = button.getAttribute('data-municipality');
-          const province = button.getAttribute('data-province');
+            document.getElementById('paymentTotalFines').textContent = `₱${totalFine.toFixed(2)}`;
+            document.getElementById('paymentTotalFineDisplay').textContent = `₱${totalFine.toFixed(2)}`;
+            document.getElementById('amountDue').textContent = `₱${unpaidFine.toFixed(2)}`;
 
-          loadingDiv.style.display = 'block';
-          console.log('Pay Now clicked for citationId:', citationId, 'driverId:', driverId);
-          fetch(`get_driver_info.php?driver_id=${encodeURIComponent(driverId)}&citation_id=${encodeURIComponent(citationId)}`, {
-            headers: { 'Accept': 'application/json' }
+            const cashInput = document.getElementById('cashInput');
+            const changeDisplay = document.getElementById('changeDisplay');
+            const paymentError = document.getElementById('paymentError');
+
+            cashInput.value = '';
+            changeDisplay.textContent = '₱0.00';
+            paymentError.style.display = 'none';
+
+            const newCashInput = cashInput.cloneNode(true);
+            cashInput.parentNode.replaceChild(newCashInput, cashInput);
+
+            newCashInput.addEventListener('input', () => {
+              const cash = parseFloat(newCashInput.value) || 0;
+              const change = cash - unpaidFine;
+              changeDisplay.textContent = `₱${change >= 0 ? change.toFixed(2) : '0.00'}`;
+              if (change < 0) {
+                paymentError.textContent = 'Insufficient cash amount.';
+                paymentError.style.display = 'block';
+              } else {
+                paymentError.style.display = 'none';
+              }
+            });
+
+            const paymentModal = document.getElementById('paymentModal');
+            paymentModal.dataset.citationId = citationId;
+            showModal(paymentModal);
           })
-            .then(response => {
-              if (!response.ok) {
-                return response.text().then(text => {
-                  throw new Error(`HTTP error! Status: ${response.status}, Response: ${text}`);
-                });
-              }
-              const contentType = response.headers.get('content-type');
-              if (!contentType || !contentType.includes('application/json')) {
-                return response.text().then(text => {
-                  throw new Error(`Unexpected content type: ${contentType}, Response: ${text}`);
-                });
-              }
-              return response.json();
-            })
-            .then(data => {
-              if (data.status === 'error') {
-                throw new Error(data.error);
-              }
-
-              loadingDiv.style.display = 'none';
-              document.getElementById('paymentLicenseNumber').textContent = data.license_number || 'N/A';
-              document.getElementById('paymentDriverName').textContent = data.driver_name || 'N/A';
-              document.getElementById('paymentDriverAddress').textContent = `${zone ? zone + ', ' : ''}${barangay ? barangay + ', ' : ''}${municipality}, ${province}`;
-              
-              const offenseTable = document.getElementById('paymentOffenseRecords');
-              offenseTable.innerHTML = '';
-              let totalFine = 0;
-              let unpaidFine = 0;
-
-              data.offenses.forEach(offense => {
-                const fine = parseFloat(offense.fine) || 150.00;
-                totalFine += fine;
-                if (offense.status !== 'Paid') {
-                  unpaidFine += fine;
-                }
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                  <td>${offense.date_time || 'N/A'}</td>
-                  <td>${offense.offense}${offense.offense_count ? ' (Offense ' + offense.offense_count + ')' : ''}</td>
-                  <td>₱${fine.toFixed(2)}</td>
-                  <td>${offense.status || 'N/A'}</td>
-                `;
-                offenseTable.appendChild(row);
-              });
-
-              document.getElementById('paymentTotalFines').textContent = `₱${totalFine.toFixed(2)}`;
-              document.getElementById('paymentTotalFineDisplay').textContent = `₱${totalFine.toFixed(2)}`;
-              document.getElementById('amountDue').textContent = `₱${unpaidFine.toFixed(2)}`;
-
-              const cashInput = document.getElementById('cashInput');
-              const changeDisplay = document.getElementById('changeDisplay');
-              const paymentError = document.getElementById('paymentError');
-
-              cashInput.value = '';
-              changeDisplay.textContent = '₱0.00';
-              paymentError.style.display = 'none';
-
-              const newCashInput = cashInput.cloneNode(true);
-              cashInput.parentNode.replaceChild(newCashInput, cashInput);
-
-              newCashInput.addEventListener('input', () => {
-                const cash = parseFloat(newCashInput.value) || 0;
-                const change = cash - unpaidFine;
-                changeDisplay.textContent = `₱${change >= 0 ? change.toFixed(2) : '0.00'}`;
-                if (change < 0) {
-                  paymentError.textContent = 'Insufficient cash amount.';
-                  paymentError.style.display = 'block';
-                } else {
-                  paymentError.style.display = 'none';
-                }
-              });
-
-              const paymentModal = document.getElementById('paymentModal');
-              paymentModal.dataset.citationId = citationId;
-              showModal(paymentModal);
-            })
-            .catch(error => {
-              loadingDiv.style.display = 'none';
-              console.error('Pay Now fetch error:', error.message);
-              alert(`Failed to load payment data: ${error.message}`);
-            });
-        });
+          .catch(error => {
+            loadingDiv.style.display = 'none';
+            alert('Error loading citation data: ' + error.message);
+            console.error('Pay Now fetch error for citationId ' + citationId + ':', error);
+          });
       });
 
       closeArchiveModal.addEventListener('click', () => {
@@ -1507,7 +1466,6 @@ require_once 'config.php';
         })
         .catch(error => {
           alert('Error archiving citation: ' + error.message);
-          console.error('Archive citation error:', error);
         });
 
         hideModal(archiveModal);
@@ -1531,7 +1489,6 @@ require_once 'config.php';
         }
       });
 
-      // Bulk actions
       document.getElementById('selectAll').addEventListener('change', (e) => {
         document.querySelectorAll('.select-citation').forEach(checkbox => {
           checkbox.checked = e.target.checked;
@@ -1563,7 +1520,6 @@ require_once 'config.php';
         .catch(error => alert('Error: ' + error.message));
       });
 
-      // Export to CSV
       document.getElementById('exportCSV').addEventListener('click', () => {
         const rows = document.querySelectorAll('#citationTable table tr');
         let csv = [];
@@ -1587,7 +1543,6 @@ require_once 'config.php';
         link.click();
       });
 
-      // Toggle timeline view
       document.getElementById('toggleView').addEventListener('click', () => {
         const tableView = document.querySelector('#citationTable table');
         const timelineView = document.getElementById('timelineView');
@@ -1608,7 +1563,6 @@ require_once 'config.php';
               <p><strong>Date:</strong> ${cols[6].textContent}</p>
               <p><strong>Violations:</strong> ${cols[7].textContent}</p>
               <p><strong>Vehicle:</strong> ${cols[4].textContent} (${cols[5].textContent})</p>
-              <p><strong>Reference Number:</strong> ${cols[9].textContent}</p>
             `;
             timelineContainer.appendChild(item);
           });
@@ -1620,8 +1574,7 @@ require_once 'config.php';
       });
 
       document.getElementById('closeModal').addEventListener('click', () => {
-        const modal = document.getElementById('driverInfoModal');
-        hideModal(modal);
+        hideModal(document.getElementById('driverInfoModal'));
       });
 
       document.getElementById('printModal').addEventListener('click', () => {
@@ -1629,8 +1582,7 @@ require_once 'config.php';
       });
 
       document.querySelector('#driverInfoModal .close').addEventListener('click', () => {
-        const modal = document.getElementById('driverInfoModal');
-        hideModal(modal);
+        hideModal(document.getElementById('driverInfoModal'));
       });
 
       let isDriverModalClick = false;
@@ -1646,8 +1598,7 @@ require_once 'config.php';
 
       document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && document.getElementById('driverInfoModal').classList.contains('show')) {
-          const modal = document.getElementById('driverInfoModal');
-          hideModal(modal);
+          hideModal(document.getElementById('driverInfoModal'));
         }
       });
 
@@ -1660,7 +1611,7 @@ require_once 'config.php';
         const cash = parseFloat(cashInput.value) || 0;
         const unpaidFines = parseFloat(document.getElementById('amountDue').textContent.replace('₱', '')) || 0;
 
-        if (cash < unpaidFines) {
+        if (cash <SCRIPT unpaidFines) {
           paymentError.textContent = 'Insufficient cash amount.';
           paymentError.style.display = 'block';
           return;
@@ -1675,12 +1626,14 @@ require_once 'config.php';
           body: `citation_id=${encodeURIComponent(citationId)}&amount=${encodeURIComponent(cash)}&csrf_token=${encodeURIComponent(csrfToken)}`
         })
         .then(response => {
-          if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+          if (!response.ok) {
+            return response.text().then(text => {
+              throw new Error(`HTTP error! Status: ${response.status}, Response: ${text}`);
+            });
+          }
           const contentType = response.headers.get('content-type');
           if (!contentType || !contentType.includes('application/json')) {
-            return response.text().then(text => {
-              throw new Error(`Unexpected content type: ${contentType}, Response: ${text}`);
-            });
+            throw new Error(`Unexpected response format: ${contentType || 'unknown'}`);
           }
           return response.json();
         })
@@ -1697,20 +1650,18 @@ require_once 'config.php';
         .catch(error => {
           loadingDiv.style.display = 'none';
           alert('Error processing payment: ' + error.message);
-          console.error('Payment fetch error:', error);
+          console.error('Fetch error:', error);
         });
 
         hideModal(paymentModal);
       });
 
       document.getElementById('cancelPayment').addEventListener('click', () => {
-        const paymentModal = document.getElementById('paymentModal');
-        hideModal(paymentModal);
+        hideModal(document.getElementById('paymentModal'));
       });
 
       document.querySelector('#paymentModal .close').addEventListener('click', () => {
-        const paymentModal = document.getElementById('paymentModal');
-        hideModal(paymentModal);
+        hideModal(document.getElementById('paymentModal'));
       });
 
       let isPaymentModalClick = false;
@@ -1726,8 +1677,7 @@ require_once 'config.php';
 
       document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && document.getElementById('paymentModal').classList.contains('show')) {
-          const paymentModal = document.getElementById('paymentModal');
-          hideModal(paymentModal);
+          hideModal(document.getElementById('paymentModal'));
         }
       });
 
@@ -1748,11 +1698,8 @@ require_once 'config.php';
         if (saved === 'false') {
           checkbox.checked = false;
           const cells = document.querySelectorAll(`#citationTable table th:nth-child(${parseInt(columnIndex) + 2}), #citationTable table td:nth-child(${parseInt(columnIndex) + 2})`);
-          cells.forEach(cell => {
-            cell.style.display = 'none';
-          });
+          cells.forEach(cell => cell.style.display = 'none');
         }
       });
-    };
-  });
-</script>
+    });
+    </SCRIPT>

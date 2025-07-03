@@ -18,3 +18,65 @@ Received request: citation_id=37276, amount=150, violation_ids=Array
 (
     [0] => 13
 )
+Received request: citation_id=37278, amount=150, violation_ids=Array
+(
+    [0] => 17
+)
+Received request: citation_id=37277, amount=150, violation_ids=Array
+(
+    [0] => 19
+)
+Received request: citation_id=37277, amount=1000, violation_ids=Array
+(
+    [0] => 20
+)
+Received request: citation_id=37279, amount=150, violation_ids=Array
+(
+    [0] => 21
+)
+Received request: citation_id=37279, amount=200, violation_ids=Array
+(
+    [0] => 22
+)
+Received request: citation_id=372793, amount=1000, violation_ids=Array
+(
+    [0] => 33
+)
+Received request: citation_id=372793, amount=2500, violation_ids=Array
+(
+    [0] => 32
+)
+Received request: citation_id=372794, amount=2500, violation_ids=Array
+(
+    [0] => 35
+)
+Received request: citation_id=372794, amount=200, violation_ids=Array
+(
+    [0] => 34
+)
+Received request: citation_id=372795, amount=200, violation_ids=Array
+(
+    [0] => 37
+)
+Received request: citation_id=372795, amount=200, violation_ids=Array
+(
+    [0] => 36
+)
+Received request: citation_id=372796, amount=300, violation_ids=Array
+(
+    [0] => 39
+    [1] => 38
+)
+Received request: citation_id=372797, amount=500, violation_ids=Array
+(
+    [0] => 41
+)
+Received request: citation_id=372798, amount=1000, violation_ids=Array
+(
+    [0] => 43
+)
+Received request: citation_id=372799, amount=300, violation_ids=Array
+(
+    [0] => 44
+    [1] => 45
+)
