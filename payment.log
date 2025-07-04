@@ -80,3 +80,34 @@ Received request: citation_id=372799, amount=300, violation_ids=Array
     [0] => 44
     [1] => 45
 )
+Received request: citation_id=372798, amount=300, violation_ids=Array
+(
+    [0] => 49
+    [1] => 48
+)
+Received request: citation_id=372797, amount=150, violation_ids=Array
+(
+    [0] => 40
+)
+Received request: citation_id=372800, amount=1000, violation_ids=Array
+(
+    [0] => 50
+)
+Received request: citation_id=372799, amount=300, violation_ids=Array
+(
+    [0] => 45
+    [1] => 44
+)
+Received request: citation_id=372798, amount=150, violation_ids=Array
+(
+    [0] => 42
+)
+Received request: citation_id=372797, amount=150, violation_ids=Array
+(
+    [0] => 40
+)
+Received request: citation_id=372800, amount=300, violation_ids=Array
+(
+    [0] => 47
+    [1] => 46
+)

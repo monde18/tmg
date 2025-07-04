@@ -51,11 +51,15 @@ try {
     }
 
     // Cache violation types
+    // unset($_SESSION['violation_types']); // Uncomment temporarily to force refresh
     if (!isset($_SESSION['violation_types'])) {
         $stmt = $conn->query("SELECT violation_type_id, violation_type, fine_amount_1, fine_amount_2, fine_amount_3 FROM violation_types ORDER BY violation_type");
         $_SESSION['violation_types'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     $violation_types = $_SESSION['violation_types'];
+    
+    // Debugging: Log violation types
+    error_log("Violation Types: " . print_r($violation_types, true));
 } catch (PDOException $e) {
     $next_ticket = "06101";
     $driver_data = [];
@@ -99,7 +103,7 @@ $conn = null;
             display: flex;
         }
 
-        /* Sidebar Styles (from sidebar.php) */
+        /* Sidebar Styles */
         .sidebar {
             width: 260px;
             background: linear-gradient(180deg, #1e3a8a 0%, #2b5dc9 70%, #3b82f6 100%);
@@ -304,7 +308,7 @@ $conn = null;
             padding: 2.5rem;
             border-radius: 12px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-            height: calc(100vh - 4rem); /* Adjust for padding */
+            height: calc(100vh - 4rem);
             overflow-y: auto;
             width: 100%;
         }
@@ -820,13 +824,16 @@ $conn = null;
                     <div class="accordion violation-list" id="violationsAccordion">
                         <?php
                         $categories = [
-                            'Helmet Violations' => ['NO HELMET (Driver)', 'NO HELMET (Backrider)'],
+                            'Helmet Violations' => ['NO HELMET (DRIVER)', 'NO HELMET (BACKRIDER)'],
                             'License / Registration' => ['NO DRIVER’S LICENSE / MINOR', 'NO / EXPIRED VEHICLE REGISTRATION', 'NO ENHANCED OPLAN VISA STICKER', 'FAILURE TO PRESENT E-OV MATCH CARD'],
                             'Vehicle Condition' => ['NO / DEFECTIVE PARTS & ACCESSORIES', 'NOISY MUFFLER (98db above)', 'NO MUFFLER ATTACHED', 'ILLEGAL MODIFICATION'],
                             'Reckless / Improper Driving' => ['RECKLESS / ARROGANT DRIVING', 'DRAG RACING', 'DRUNK DRIVING', 'DRIVING IN SHORT / SANDO'],
                             'Traffic Rules' => ['DISREGARDING TRAFFIC SIGN', 'PASSENGER ON TOP OF THE VEHICLE', 'ILLEGAL PARKING', 'ROAD OBSTRUCTION', 'BLOCKING PEDESTRIAN LANE', 'LOADING/UNLOADING IN PROHIBITED ZONE', 'DOUBLE PARKING'],
                             'Miscellaneous' => ['COLORUM OPERATION', 'NO TRASHBIN', 'OVERLOADED PASSENGER', 'OVER CHARGING / UNDER CHARGING', 'REFUSAL TO CONVEY PASSENGER/S']
                         ];
+
+                        // Debugging: Log violation types
+                        error_log("Violation Types: " . print_r($violation_types, true));
 
                         foreach ($categories as $category => $category_violations) {
                             $category_id = htmlspecialchars(strtolower(str_replace([' ', '/', '(', ')'], '', $category)));
@@ -836,8 +843,10 @@ $conn = null;
                             echo "</h2>";
                             echo "<div id='collapse-$category_id' class='accordion-collapse collapse' aria-labelledby='heading-$category_id' data-bs-parent='#violationsAccordion'>";
                             echo "<div class='accordion-body p-4'>";
+                            $violations_found = false;
                             foreach ($violation_types as $v) {
                                 if (in_array($v['violation_type'], $category_violations)) {
+                                    $violations_found = true;
                                     $offense_count = isset($offense_counts[$v['violation_type']]) ? (int)$offense_counts[$v['violation_type']] + 1 : 1;
                                     $label = $v['violation_type'] . ($offense_count > 1 ? " - {$offense_count}" . ($offense_count == 2 ? "nd" : ($offense_count == 3 ? "rd" : "th")) . " Offense" : "") . " (₱" . number_format($v["fine_amount_$offense_count"], 2) . ")";
                                     $key = htmlspecialchars(strtolower(str_replace([' ', '/', '(', ')'], '', $v['violation_type'])));
@@ -846,6 +855,9 @@ $conn = null;
                                     echo "<label class='form-check-label' for='$key'>" . htmlspecialchars($label) . "</label>";
                                     echo "</div>";
                                 }
+                            }
+                            if (!$violations_found) {
+                                echo "<p class='text-muted'>No violations available in this category.</p>";
                             }
                             echo "</div></div></div>";
                         }
@@ -1013,6 +1025,11 @@ $conn = null;
             document.getElementById('citationForm').addEventListener('submit', function(e) {
                 e.preventDefault();
 
+                // Debug: Log available violations
+                violationCheckboxes.forEach(checkbox => {
+                    console.log('Violation Checkbox:', checkbox.value, 'Checked:', checkbox.checked);
+                });
+
                 // Validate vehicle type
                 let vehicleSelected = false;
                 vehicleCheckboxes.forEach(checkbox => {
@@ -1037,7 +1054,7 @@ $conn = null;
                     }
                 });
                 if (!violationSelected) {
-                    alert('Please select at least one violation.');
+                    alert('Please select at least one violation. If no violations are available, please contact the system administrator.');
                     return;
                 }
 
@@ -1082,7 +1099,7 @@ $conn = null;
                 })
                 .catch(error => {
                     console.error('Fetch Error:', error);
-                    alert('Error submitting form: ' + error);
+                    alert('Error submitting form: ' + error.message);
                 });
             });
 

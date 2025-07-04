@@ -637,6 +637,10 @@ $conn = null;
                 background-color: #f1f5f9;
             }
         }
+        .table th:first-child, .table td:first-child {
+    width: 50px;
+    text-align: center;
+}
     </style>
 </head>
 <body>
@@ -727,6 +731,7 @@ $conn = null;
                 <table class="table">
                     <thead>
                         <tr>
+                            <th>#</th>
                             <th>Ticket #</th>
                             <th>Driver</th>
                             <th>License #</th>
@@ -913,82 +918,89 @@ $conn = null;
         };
 
         // Fetch citations
-        const fetchCitations = (page = currentPage, append = false) => {
-          if (isLoading) return;
-          isLoading = true;
-          elements.filterError.style.display = 'none';
-          elements.loading.style.display = 'flex';
-          if (!append) elements.citationTable.innerHTML = '';
+const fetchCitations = (page = currentPage, append = false) => {
+    if (isLoading) return;
+    isLoading = true;
+    elements.filterError.style.display = 'none';
+    elements.loading.style.display = 'flex';
+    if (!append) elements.citationTable.innerHTML = '';
 
-          // Validate filter inputs
-          if (elements.dateFromFilter.value && !elements.dateToFilter.value || !elements.dateFromFilter.value && elements.dateToFilter.value) {
-            elements.filterError.textContent = 'Please provide both start and end dates or neither.';
-            elements.filterError.style.display = 'block';
-            elements.loading.style.display = 'none';
-            isLoading = false;
-            elements.filterError.scrollIntoView({ behavior: 'smooth' });
-            return;
-          }
-          if (elements.dateFromFilter.value && elements.dateToFilter.value && new Date(elements.dateFromFilter.value) > new Date(elements.dateToFilter.value)) {
-            elements.filterError.textContent = 'Start date cannot be after end date.';
-            elements.filterError.style.display = 'block';
-            elements.loading.style.display = 'none';
-            isLoading = false;
-            elements.filterError.scrollIntoView({ behavior: 'smooth' });
-            return;
-          }
+    // Validate filter inputs
+    if (elements.dateFromFilter.value && !elements.dateToFilter.value || !elements.dateFromFilter.value && elements.dateToFilter.value) {
+        elements.filterError.textContent = 'Please provide both start and end dates or neither.';
+        elements.filterError.style.display = 'block';
+        elements.loading.style.display = 'none';
+        isLoading = false;
+        elements.filterError.scrollIntoView({ behavior: 'smooth' });
+        return;
+    }
+    if (elements.dateFromFilter.value && elements.dateToFilter.value && new Date(elements.dateFromFilter.value) > new Date(elements.dateToFilter.value)) {
+        elements.filterError.textContent = 'Start date cannot be after end date.';
+        elements.filterError.style.display = 'block';
+        elements.loading.style.display = 'none';
+        isLoading = false;
+        elements.filterError.scrollIntoView({ behavior: 'smooth' });
+        return;
+    }
 
-          const params = new URLSearchParams({
-            page: page,
-            records_per_page: elements.recordsPerPage.value,
-            payment_status: elements.paymentStatusFilter.value,
-            sort: elements.sortFilter.value,
-            search: elements.searchFilter.value.trim(),
-            date_from: elements.dateFromFilter.value,
-            date_to: elements.dateToFilter.value,
-            csrf_token: csrfToken
-          });
+    const params = new URLSearchParams({
+        page: page,
+        records_per_page: elements.recordsPerPage.value,
+        payment_status: elements.paymentStatusFilter.value,
+        sort: elements.sortFilter.value,
+        search: elements.searchFilter.value.trim(),
+        date_from: elements.dateFromFilter.value,
+        date_to: elements.dateToFilter.value,
+        csrf_token: csrfToken
+    });
 
-          fetch(`fetch_payments.php?${params.toString()}`, { cache: 'no-store' })
-            .then(response => {
-              if (!response.ok) {
+    fetch(`fetch_payments.php?${params.toString()}`, { cache: 'no-store' })
+        .then(response => {
+            if (!response.ok) {
                 return response.text().then(text => {
-                  throw new Error(`HTTP error: ${response.status}, Response: ${text}`);
+                    throw new Error(`HTTP error: ${response.status}, Response: ${text}`);
                 });
-              }
-              const contentType = response.headers.get('content-type');
-              if (!contentType || !contentType.includes('application/json')) {
+            }
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
                 throw new Error(`Unexpected content type: ${contentType || 'unknown'}`);
-              }
-              return response.json();
-            })
-            .then(data => {
-              elements.loading.style.display = 'none';
-              isLoading = false;
-              if (data.error) {
-                elements.citationTable.innerHTML = `<tr><td colspan="13" class="empty-state">${data.error}</td></tr>`;
+            }
+            return response.json();
+        })
+        .then(data => {
+            elements.loading.style.display = 'none';
+            isLoading = false;
+            if (data.error) {
+                elements.citationTable.innerHTML = `<tr><td colspan="14" class="empty-state">${data.error}</td></tr>`;
                 console.error('Fetch error:', data.error);
-              } else {
-                if (data.html) {
-                  elements.citationTable.insertAdjacentHTML(append ? 'beforeend' : 'afterbegin', data.html);
+            } else {
+                if (data.html && data.rows && data.rows.length) {
+                    const recordsPerPage = parseInt(elements.recordsPerPage.value);
+                    const startRow = (page - 1) * recordsPerPage + 1;
+                    let rowNumber = startRow;
+                    const modifiedHtml = data.rows.map(row => {
+                        const rowHtml = data.html.split('<tr>').slice(1).find(tr => tr.includes(row.ticket_number));
+                        return `<tr><td>${rowNumber++}</td>${rowHtml}`;
+                    }).join('');
+                    elements.citationTable.insertAdjacentHTML(append ? 'beforeend' : 'afterbegin', modifiedHtml);
                 } else {
-                  elements.citationTable.innerHTML = '<tr><td colspan="13" class="empty-state"><i class="fas fa-info-circle"></i> No citations found for the selected filters.</td></tr>';
+                    elements.citationTable.innerHTML = '<tr><td colspan="14" class="empty-state"><i class="fas fa-info-circle"></i> No citations found for the selected filters.</td></tr>';
                 }
                 totalRecords = data.totalRecords || 0;
                 totalPages = Math.ceil(totalRecords / parseInt(elements.recordsPerPage.value));
                 attachEventListeners();
                 updatePagination(page);
-              }
-            })
-            .catch(error => {
-              elements.loading.style.display = 'none';
-              isLoading = false;
-              elements.citationTable.innerHTML = `<tr><td colspan="13" class="empty-state">Error loading citations: ${error.message}</td></tr>`;
-              elements.filterError.textContent = `Error loading citations: ${error.message}`;
-              elements.filterError.style.display = 'block';
-              console.error('Fetch citations error:', error);
-            });
-        };
+            }
+        })
+        .catch(error => {
+            elements.loading.style.display = 'none';
+            isLoading = false;
+            elements.citationTable.innerHTML = `<tr><td colspan="14" class="empty-state">Error loading citations: ${error.message}</td></tr>`;
+            elements.filterError.textContent = `Error loading citations: ${error.message}`;
+            elements.filterError.style.display = 'block';
+            console.error('Fetch citations error:', error);
+        });
+};
 
         // Update pagination
         const updatePagination = (current) => {
@@ -1087,38 +1099,64 @@ $conn = null;
         };
 
         // Fetch driver offenses
-        const fetchDriverOffenses = (driverId) => {
-          fetch(`fetch_driver_offenses.php?driver_id=${driverId}&csrf_token=${csrfToken}`, { cache: 'no-store' })
-            .then(response => {
-              if (!response.ok) throw new Error('Network error');
-              return response.json();
-            })
-            .then(data => {
-              elements.driverOffenses.innerHTML = '';
-              let totalFines = 0;
-              if (!data.offenses || !data.offenses.length) {
-                elements.driverOffenses.innerHTML = '<tr><td colspan="4" class="empty-state">No offenses found.</td></tr>';
-              } else {
-                data.offenses.forEach(offense => {
-                  const fine = parseFloat(offense.fine) || 0;
-                  totalFines += fine;
-                  const row = document.createElement('tr');
-                  row.innerHTML = `
-                    <td>${offense.date || 'N/A'}</td>
+      const fetchDriverOffenses = (driverId) => {
+    elements.loading.style.display = 'flex';
+    elements.driverOffenses.innerHTML = '';
+    console.log(`Fetching offenses for driverId: ${driverId}`);
+    
+    fetch(`get_driver_info.php?driver_id=${encodeURIComponent(driverId)}&csrf_token=${encodeURIComponent(csrfToken)}`, { 
+        headers: { 'Accept': 'application/json' },
+        cache: 'no-store'
+    })
+        .then(response => {
+            if (!response.ok) {
+                return response.text().then(text => {
+                    throw new Error(`HTTP error: ${response.status}, Response: ${text}`);
+                });
+            }
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error(`Unexpected content type: ${contentType || 'unknown'}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            elements.loading.style.display = 'none';
+            let totalFines = 0;
+
+            if (data.error) {
+                elements.driverOffenses.innerHTML = `<tr><td colspan="4" class="empty-state">Error: ${data.error}</td></tr>`;
+                console.error('Fetch driver offenses error:', data.error);
+                return;
+            }
+
+            if (!data || !Array.isArray(data) || data.length === 0) {
+                elements.driverOffenses.innerHTML = '<tr><td colspan="4" class="empty-state"><i class="fas fa-info-circle"></i> No offenses found for this driver.</td></tr>';
+                elements.driverTotalFines.textContent = '₱0.00';
+                return;
+            }
+
+            data.forEach(offense => {
+                const fine = parseFloat(offense.fine) || 0;
+                totalFines += fine;
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${offense.apprehension_datetime || 'N/A'}</td>
                     <td>${offense.violation_type || 'Unknown'}</td>
                     <td>₱${fine.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
-                    <td>${offense.payment_status || 'Unpaid'}</td>
-                  `;
-                  elements.driverOffenses.appendChild(row);
-                });
-                elements.driverTotalFines.textContent = `₱${totalFines.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
-              }
-            })
-            .catch(error => {
-              elements.driverOffenses.innerHTML = '<tr><td colspan="4" class="empty-state">Error loading offenses.</td></tr>';
-              console.error('Fetch driver offenses error:', error);
+                    <td>${offense.violation_payment_status || 'Unpaid'}</td>
+                `;
+                elements.driverOffenses.appendChild(row);
             });
-        };
+            elements.driverTotalFines.textContent = `₱${totalFines.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+        })
+        .catch(error => {
+            elements.loading.style.display = 'none';
+            elements.driverOffenses.innerHTML = `<tr><td colspan="4" class="empty-state">Error loading offenses: ${error.message}</td></tr>`;
+            elements.driverTotalFines.textContent = '₱0.00';
+            console.error('Fetch driver offenses error:', error);
+        });
+};
 
         // Fetch payment offenses
         const fetchPaymentOffenses = (citationId, driverId) => {
