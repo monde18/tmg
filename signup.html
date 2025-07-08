@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sign Up</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- reCAPTCHA API -->
+  <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap');
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body {
+      font-family:'Roboto',sans-serif;
+      background:url('FINAL1 copy.jpg') no-repeat center center fixed;
+      background-size:cover;
+      overflow:hidden; position:relative;
+    }
+    body::before {
+      content:''; position:fixed; inset:0;
+      background:rgba(0,0,0,0.55); z-index:-2;
+    }
+    #particleCanvas {
+      position:fixed; top:0; left:0;
+      width:100%; height:100%; z-index:-1;
+      opacity:0.6; pointer-events:none;
+    }
+    .signup-wrapper {
+      min-height:100vh;
+      display:flex; align-items:center; justify-content:center;
+      padding:1rem;
+    }
+    .signup-card {
+      background:rgba(255,255,255,0.15);
+      backdrop-filter:blur(8px);
+      border:1px solid rgba(255,255,255,0.3);
+      border-radius:12px;
+      padding:2rem 2rem 1.5rem;
+      width:100%; max-width:480px;
+      box-shadow:0 8px 24px rgba(0,0,0,0.2);
+      color:#fff; position:relative; z-index:0;
+    }
+    .signup-card .logo {
+      display:block; margin:0 auto 1rem; width:80px;
+    }
+    .signup-card h2 {
+      text-align:center; margin-bottom:1.5rem;
+      font-weight:500; font-size:1.5rem; color:#f1f1f1;
+    }
+    .form-floating { position:relative; margin-bottom:1rem; }
+    .form-floating>.form-control,
+    .form-floating>.form-select {
+      width:100%; background:rgba(255,255,255,0.9);
+      border:1px solid #ccc; border-radius:6px;
+      padding:1.1rem .75rem .35rem;
+      transition:border-color .2s,box-shadow .2s; color:#333;
+      appearance:none;
+    }
+    .form-floating>label {
+      position:absolute; top:.6rem; left:.75rem;
+      font-size:.9rem; color:#666;
+      transition:transform .2s, color .2s, font-weight .2s;
+      pointer-events:none; transform-origin:left top;
+    }
+    .form-floating>.form-control:focus,
+    .form-floating>.form-select:focus {
+      border-color:#2563eb;
+      box-shadow:0 2px 8px rgba(37,99,235,0.4);
+      background:#fff;
+    }
+    .form-floating>.form-control:focus~label,
+    .form-floating>.form-control:not(:placeholder-shown)~label,
+    .form-floating>.form-select:focus~label,
+    .form-floating>.form-select:not([value=""])~label {
+      transform:translateY(-2rem) scale(.8);
+      color:#2563eb; font-weight:600;
+    }
+    /* Honeypot hidden off-screen */
+    .honeypot {
+      position:absolute; left:-9999px; top:auto;
+      width:1px; height:1px; overflow:hidden;
+    }
+    .btn-primary {
+      background-color:#3b82f6; border:none;
+      border-radius:6px; padding:.75rem;
+      font-weight:500; width:100%;
+      transition:background-color .2s;
+    }
+    .btn-primary:hover { background-color:#2563eb; }
+    .form-check-label a.text-link {
+      color:#93c5fd; text-decoration:underline;
+    }
+    .form-check-label, .text-center a {
+      color:#ddd; text-decoration:none; font-size:.9rem;
+    }
+    .text-center a:hover { text-decoration:underline; }
+  </style>
+</head>
+<body>
+  <canvas id="particleCanvas"></canvas>
+
+  <div class="signup-wrapper">
+    <div class="signup-card">
+      <img src="l2.png" alt="Logo" class="logo">
+      <h2>Create Account</h2>
+
+      <div class="form-floating">
+        <input type="text" class="form-control" id="fullName" placeholder="Full Name" required>
+        <label for="fullName">Full Name</label>
+      </div>
+
+      <div class="form-floating">
+        <input type="text" class="form-control" id="username" placeholder="Username" required>
+        <label for="username">Username</label>
+      </div>
+
+      <div class="form-floating">
+        <select class="form-select" id="userType" required>
+          <option value="" disabled selected></option>
+          <option value="tmg-admin">TMG Admin</option>
+          <option value="tmg-staff">TMG Staff</option>
+          <option value="treasury">Treasury</option>
+        </select>
+        <label for="userType">User Type</label>
+      </div>
+
+      <div class="form-floating">
+        <input
+          type="password"
+          class="form-control"
+          id="password"
+          placeholder="Password"
+          required
+          data-bs-toggle="tooltip"
+          data-bs-placement="right"
+          title="Must be at least 8 characters and include a number or symbol."
+        >
+        <label for="password">Password</label>
+      </div>
+
+      <div class="form-floating">
+        <input type="password" class="form-control" id="confirmPassword" placeholder="Confirm Password" required>
+        <label for="confirmPassword">Confirm Password</label>
+      </div>
+
+      <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" id="showPasswords" onclick="togglePasswords()">
+        <label class="form-check-label" for="showPasswords">Show Passwords</label>
+      </div>
+
+      <!-- reCAPTCHA (test keys) -->
+      <div class="g-recaptcha mb-3" data-sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"></div>
+
+      <!-- Honeypot field -->
+      <div class="honeypot" aria-hidden="true">
+        <label for="hp_email">Leave this field blank</label>
+        <input type="text" id="hp_email" name="hp_email" autocomplete="off" tabindex="-1">
+      </div>
+
+      <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" id="agreeTerms">
+        <label class="form-check-label" for="agreeTerms">
+          I agree to the
+          <a href="#" class="text-link" data-bs-toggle="modal" data-bs-target="#termsModal">Terms &amp; Conditions</a>
+          and
+          <a href="#" class="text-link" data-bs-toggle="modal" data-bs-target="#privacyModal">Privacy Policy</a>
+        </label>
+      </div>
+
+      <button class="btn btn-primary mb-2" onclick="handleSignup()">Sign Up</button>
+      <p class="text-center small">Already have an account? <a href="login.html">Sign in</a></p>
+    </div>
+  </div>
+
+  <!-- Terms & Conditions Modal -->
+  <div class="modal fade" id="termsModal" tabindex="-1" aria-labelledby="termsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content text-dark">
+        <div class="modal-header">
+          <h5 class="modal-title" id="termsModalLabel">Terms &amp; Conditions</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p><strong>1. Acceptance of Terms:</strong> By creating an account, you agree to comply with these Terms & Conditions and all applicable Philippine laws including the Data Privacy Act (RA 10173).</p>
+          <p><strong>2. Use of Service:</strong> You may only use the service for lawful purposes. Unauthorized use, reproduction, or distribution of content is prohibited.</p>
+          <p><strong>3. Account Security:</strong> You are responsible for safeguarding your username and password. Notify us immediately of any unauthorized access.</p>
+          <p><strong>4. Intellectual Property:</strong> All content, logos, and materials are protected by Philippine and international IP laws.</p>
+          <p><strong>5. Limitation of Liability:</strong> To the fullest extent permitted by law, we are not liable for any indirect, incidental, or consequential damages.</p>
+          <p><strong>6. Governing Law:</strong> These Terms are governed by the laws of the Republic of the Philippines. Any dispute shall be resolved in Philippine courts.</p>
+          <p><strong>7. Amendments:</strong> We may modify these Terms at any time. Continued use constitutes acceptance of changes.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Privacy Policy Modal -->
+  <div class="modal fade" id="privacyModal" tabindex="-1" aria-labelledby="privacyModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content text-dark">
+        <div class="modal-header">
+          <h5 class="modal-title" id="privacyModalLabel">Privacy Policy</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p><strong>1. Data Collection:</strong> We collect personal information such as name, username, and password. Under RA 10173, you have rights to access and correct your data.</p>
+          <p><strong>2. Use of Data:</strong> Your data is used only to provide and improve our services, and for account management.</p>
+          <p><strong>3. Data Sharing:</strong> We do not share your personal data with third parties except as required by law or with your consent.</p>
+          <p><strong>4. Security Measures:</strong> We implement reasonable technical and organizational measures to protect your data from unauthorized access.</p>
+          <p><strong>5. Retention:</strong> Personal data is retained only as long as necessary for the purposes collected or as required by Philippine regulations.</p>
+          <p><strong>6. Your Rights:</strong> You may access, rectify, or request deletion of your data by contacting our Data Protection Officer.</p>
+          <p><strong>7. Updates:</strong> This Policy may be updated. Continued use of the service signifies acceptance of changes.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap & custom scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // Tooltip for password strength
+    const pwInput = document.getElementById('password');
+    const pwTooltip = new bootstrap.Tooltip(pwInput, { trigger: 'manual' });
+    pwInput.addEventListener('input', () => {
+      pwInput.value.length < 8 ? pwTooltip.show() : pwTooltip.hide();
+    });
+
+    // Toggle password visibility
+    function togglePasswords() {
+      ['password','confirmPassword'].forEach(id => {
+        const el = document.getElementById(id);
+        el.type = el.type === 'password' ? 'text' : 'password';
+      });
+    }
+
+    // Particle background
+    const canvas = document.getElementById('particleCanvas'),
+          ctx = canvas.getContext('2d');
+    let W = canvas.width = window.innerWidth,
+        H = canvas.height = window.innerHeight;
+    const particles = [], COUNT = 120, MAX_DIST = 120;
+    const mouse = { x: null, y: null, radius: 100 };
+    window.addEventListener('resize', () => {
+      W = canvas.width = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+    });
+    window.addEventListener('mousemove', e => {
+      mouse.x = e.clientX; mouse.y = e.clientY;
+    });
+    window.addEventListener('mouseleave', () => {
+      mouse.x = mouse.y = null;
+    });
+    class Particle {
+      constructor() {
+        this.x = Math.random() * W;
+        this.y = Math.random() * H;
+        this.vx = (Math.random() - 0.5) * 1.5;
+        this.vy = (Math.random() - 0.5) * 1.5;
+      }
+      update() {
+        this.x += this.vx; this.y += this.vy;
+        if (this.x < 0 || this.x > W) this.vx *= -1;
+        if (this.y < 0 || this.y > H) this.vy *= -1;
+        if (mouse.x !== null) {
+          const dx = this.x - mouse.x, dy = this.y - mouse.y, d = Math.hypot(dx,dy);
+          if (d < mouse.radius) {
+            const f = (mouse.radius - d) / mouse.radius * 0.6;
+            this.vx += (dx/d)*f; this.vy += (dy/d)*f;
+          }
+        }
+        this.vx *= 0.98; this.vy *= 0.98;
+      }
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x,this.y,2,0,Math.PI*2);
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.fill();
+      }
+    }
+    for (let i=0; i<COUNT; i++) particles.push(new Particle());
+    function connect() {
+      for (let i=0; i<particles.length; i++) {
+        for (let j=i+1; j<particles.length; j++) {
+          const p1 = particles[i], p2 = particles[j],
+                dx = p1.x - p2.x, dy = p1.y - p2.y, d = Math.hypot(dx,dy);
+          if (d < MAX_DIST) {
+            ctx.beginPath();
+            ctx.moveTo(p1.x,p1.y);
+            ctx.lineTo(p2.x,p2.y);
+            ctx.strokeStyle = `rgba(255,255,255,${1 - d/MAX_DIST})`;
+            ctx.lineWidth = 1.2;
+            ctx.stroke();
+          }
+        }
+      }
+    }
+    function animate() {
+      ctx.clearRect(0,0,W,H);
+      particles.forEach(p => { p.update(); p.draw(); });
+      connect();
+      requestAnimationFrame(animate);
+    }
+    animate();
+
+    // Form submission with honeypot & reCAPTCHA check
+    function handleSignup() {
+      // Honeypot
+      if (document.getElementById('hp_email').value) return;
+
+      // reCAPTCHA
+      if (!grecaptcha.getResponse()) {
+        return alert('Please confirm you are not a robot.');
+      }
+
+      const name    = document.getElementById('fullName').value.trim(),
+            user    = document.getElementById('username').value.trim(),
+            type    = document.getElementById('userType').value,
+            pwd     = pwInput.value,
+            cpw     = document.getElementById('confirmPassword').value,
+            agreed  = document.getElementById('agreeTerms').checked;
+
+      if (!name||!user||!type||!pwd||!cpw)
+        return alert('Please fill in all fields.');
+      if (pwd !== cpw)
+        return alert('Passwords do not match.');
+      if (pwd.length < 8) {
+        pwTooltip.show();
+        return alert('Please choose a stronger password.');
+      }
+      if (!agreed)
+        return alert('You must agree to the Terms & Conditions.');
+
+      // Submit form data to server here...
+      console.log({
+        name, user, type, pwd,
+        'g-recaptcha-response': grecaptcha.getResponse()
+      });
+      alert('Account created! Check console.');
+    }
+  </script>
+</body>
+</html>

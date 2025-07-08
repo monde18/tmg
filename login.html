@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Login</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap');
+    * { box-sizing: border-box; margin:0; padding:0 }
+    body {
+      font-family:'Roboto',sans-serif;
+      background:url('FINAL1 copy.jpg') no-repeat center center fixed;
+      background-size:cover;
+      position:relative; overflow:hidden;
+    }
+    body::before {
+      content:''; position:fixed; inset:0;
+      background:rgba(0,0,0,0.55); z-index:-2;
+    }
+    #particleCanvas {
+      position:fixed; top:0; left:0;
+      width:100%; height:100%; z-index:-1;
+      opacity:0.6; pointer-events:none;
+    }
+    .login-wrapper {
+      min-height:100vh;
+      display:flex; align-items:center; justify-content:center;
+      padding:1rem;
+    }
+    .login-card {
+      background:rgba(255,255,255,0.15);
+      backdrop-filter:blur(8px);
+      border:1px solid rgba(255,255,255,0.3);
+      border-radius:12px;
+      padding:2rem 2rem 1.5rem;
+      width:100%; max-width:360px;
+      box-shadow:0 8px 24px rgba(0,0,0,0.2);
+      color:#fff; position:relative; z-index:0;
+    }
+    .login-card .logo {
+      display:block; margin:0 auto 1rem; width:80px;
+    }
+    .login-card h2 {
+      text-align:center; margin-bottom:1.5rem;
+      font-weight:500; font-size:1.5rem; color:#f1f1f1;
+    }
+    .form-floating { position:relative; margin-bottom:1rem; }
+    .form-floating > .form-control {
+      width:100%; background:rgba(255,255,255,0.9);
+      border:1px solid #ccc; border-radius:6px;
+      padding:1.1rem .75rem .35rem;
+      transition:border-color .2s, box-shadow .2s; color:#333;
+    }
+    .form-floating > label {
+      position:absolute; top:.6rem; left:.75rem;
+      font-size:.9rem; color:#666;
+      transition:transform .2s, color .2s, font-weight .2s;
+      pointer-events:none; transform-origin:left top;
+    }
+    .form-floating > .form-control:focus {
+      border-color:#2563eb;
+      box-shadow:0 2px 8px rgba(37,99,235,0.4);
+      background:#fff;
+    }
+    .form-floating > .form-control:focus ~ label,
+    .form-floating > .form-control:not(:placeholder-shown) ~ label {
+      transform:translateY(-1.8rem) scale(.8);
+      color:#2563eb; font-weight:600;
+    }
+    .btn-primary {
+      background-color:#3b82f6; border:none;
+      border-radius:6px; padding:.75rem;
+      font-weight:500; width:100%;
+      transition:background-color .2s;
+    }
+    .btn-primary:hover { background-color:#2563eb; }
+    .form-check-label { color:#ddd; font-size:.9rem; }
+    .text-center a { color:#93c5fd; text-decoration:none; }
+    .text-center a:hover { text-decoration:underline; }
+  </style>
+</head>
+<body>
+  <canvas id="particleCanvas"></canvas>
+  <div class="login-wrapper">
+    <div class="login-card" role="form">
+      <img src="l2.png" alt="Logo" class="logo">
+      <h2>Welcome Back</h2>
+      <div class="form-floating mb-3">
+        <input type="text" class="form-control" id="username" placeholder="Username" required>
+        <label for="username">Username</label>
+      </div>
+      <div class="form-floating mb-3">
+        <input type="password" class="form-control" id="password" placeholder="Password" required>
+        <label for="password">Password</label>
+      </div>
+      <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" id="showPassword" onclick="togglePassword()">
+        <label class="form-check-label" for="showPassword">Show Password</label>
+      </div>
+      <button class="btn btn-primary mb-2" onclick="handleSubmit()">Sign In</button>
+      <p class="text-center small">Don’t have an account? <a href="signup.html">Sign up</a></p>
+    </div>
+  </div>
+
+  <script>
+    // particles.js same as before
+    const canvas = document.getElementById('particleCanvas'), ctx = canvas.getContext('2d');
+    let W=canvas.width=window.innerWidth, H=canvas.height=window.innerHeight;
+    const particles=[], COUNT=120, MAX_DIST=120;
+    const mouse={x:null,y:null,radius:100};
+    window.addEventListener('resize',()=>{W=canvas.width=window.innerWidth;H=canvas.height=window.innerHeight});
+    window.addEventListener('mousemove',e=>{mouse.x=e.clientX;mouse.y=e.clientY});
+    window.addEventListener('mouseleave',()=>{mouse.x=mouse.y=null});
+    class P{constructor(){this.x=Math.random()*W;this.y=Math.random()*H;this.vx=(Math.random()-0.5)*1.5;this.vy=(Math.random()-0.5)*1.5;}
+      update(){this.x+=this.vx;this.y+=this.vy; if(this.x<0||this.x>W) this.vx*=-1; if(this.y<0||this.y>H) this.vy*=-1;
+        if(mouse.x!==null){const dx=this.x-mouse.x,dy=this.y-mouse.y,d=Math.hypot(dx,dy);
+          if(d<mouse.radius){const f=(mouse.radius-d)/mouse.radius*0.6; this.vx+=(dx/d)*f; this.vy+=(dy/d)*f;}}
+        this.vx*=0.98;this.vy*=0.98;}
+      draw(){ctx.beginPath();ctx.arc(this.x,this.y,2,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,0.9)';ctx.fill();}
+    }
+    for(let i=0;i<COUNT;i++) particles.push(new P());
+    function connect(){for(let i=0;i<particles.length;i++){
+      for(let j=i+1;j<particles.length;j++){const p1=particles[i],p2=particles[j],dx=p1.x-p2.x,dy=p1.y-p2.y,d=Math.hypot(dx,dy);
+        if(d<MAX_DIST){ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.lineTo(p2.x,p2.y);
+          ctx.strokeStyle=`rgba(255,255,255,${1-d/MAX_DIST})`;ctx.lineWidth=1.2;ctx.stroke();}}}}
+    function animate(){ctx.clearRect(0,0,W,H);particles.forEach(p=>{p.update();p.draw()});connect();requestAnimationFrame(animate);}
+    animate();
+
+    // form
+    function togglePassword(){
+      const pw=document.getElementById('password');
+      pw.type = pw.type==='password'?'text':'password';
+    }
+    function handleSubmit(){
+      const u=document.getElementById('username').value.trim(),
+            p=document.getElementById('password').value;
+      if(!u||!p) return alert('Please fill in all fields.');
+      console.log({ username:u, password:p });
+      alert('Login submitted! Check console.');
+    }
+  </script>
+</body>
+</html>

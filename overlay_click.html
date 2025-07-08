@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Click to Get X/Y in mm</title>
+  <style>
+    body { margin:20px; font-family:sans-serif; text-align:center; }
+    #canvas {
+      position: relative;
+      width: 100mm;        /* exactly 10 cm wide */
+      height: 200mm;       /* exactly 20 cm tall */
+      margin: 0 auto;
+      border: 1px solid #888;
+      cursor: crosshair;
+    }
+    #canvas img { position:absolute; top:0; left:0; width:100%; height:100%; }
+    #grid     { z-index:1; }
+    #template { z-index:2; opacity:0.5; }
+    #info { margin-top:1em; font-size:0.9em; color:#333; }
+  </style>
+</head>
+<body>
+  <h1>Click on the Receipt to Get Coordinates</h1>
+  <div id="canvas">
+    <img id="grid"     src="grid.png"     alt="Calibration Grid">
+    <img id="template" src="resibo.png"   alt="Receipt Template">
+  </div>
+  <div id="info">
+    <pre id="coords">X: – px (– mm),  Y: – px (– mm)</pre>
+  </div>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('canvas');
+      const coords = document.getElementById('coords');
+      canvas.addEventListener('click', e => {
+        const r = canvas.getBoundingClientRect();
+        const px = {
+          x: Math.round(e.clientX - r.left),
+          y: Math.round(e.clientY - r.top)
+        };
+        const mm = {
+          x: px.x / r.width  * 100,  // 100 mm = r.width px
+          y: px.y / r.height * 200   // 200 mm = r.height px
+        };
+        coords.textContent =
+          `X: ${px.x} px (${mm.x.toFixed(1)} mm)   ` +
+          `Y: ${px.y} px (${mm.y.toFixed(1)} mm)`;
+      });
+    })();
+  </script>
+</body>
+</html>

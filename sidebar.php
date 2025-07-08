@@ -15,6 +15,12 @@
         <span>Dashboard</span>
       </a>
     </li>
+        <li>
+      <a href="index.php" class="<?php echo basename($_SERVER['PHP_SELF']) == 'index.php' ? 'active' : ''; ?>" aria-label="Go to Add Citation">
+        <i class="fas fa-plus-circle"></i>
+        <span>Add Citation</span>
+      </a>
+    </li>
     <li>
       <a href="records.php" class="<?php echo basename($_SERVER['PHP_SELF']) == 'records.php' ? 'active' : ''; ?>" aria-label="Go to Traffic Citations">
         <i class="fas fa-file-alt"></i>
@@ -45,12 +51,7 @@
         <span>Manage Violations</span>
       </a>
     </li>
-    <li>
-      <a href="index.php" class="<?php echo basename($_SERVER['PHP_SELF']) == 'index.php' ? 'active' : ''; ?>" aria-label="Go to Add Citation">
-        <i class="fas fa-plus-circle"></i>
-        <span>Add Citation</span>
-      </a>
-    </li>
+
   </ul>
   <div class="logout-link">
     <a href="logout.php" aria-label="Logout">
@@ -91,7 +92,7 @@
   /* Updated Sidebar Styles */
   .sidebar {
     width: 260px;
-    background: linear-gradient(180deg, #1e3a8a 0%, #2b5dc9 70%, #3b82f6 100%);
+    background:rgb(8, 4, 29);
     color: #fff;
     height: 100vh;
     position: fixed;

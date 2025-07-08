@@ -1,4 +1,6 @@
 <?php
+// treasury_payments.php
+// Frontend for managing traffic citation payments, displaying summaries, and handling payments
 session_start();
 if (!isset($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -638,9 +640,9 @@ $conn = null;
             }
         }
         .table th:first-child, .table td:first-child {
-    width: 50px;
-    text-align: center;
-}
+            width: 50px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -654,12 +656,7 @@ $conn = null;
 
     <div class="content" id="content">
         <div class="container">
-            <div class="header">
-                <h4>Republic of the Philippines</h4>
-                <h4>Province of Cagayan • Municipality of Baggao</h4>
-                <h1>Treasury Payment Management</h1>
-            </div>
-
+      
             <div class="summary-section">
                 <div class="summary-card">
                     <i class="fas fa-ticket-alt"></i>
@@ -715,8 +712,8 @@ $conn = null;
                     <option value="100" <?php echo $recordsPerPage == 100 ? 'selected' : ''; ?>>100</option>
                 </select>
                 <input type="text" id="searchFilter" class="filter-input" placeholder="Search by ticket or driver name" value="<?php echo htmlspecialchars($search); ?>" aria-label="Search Citations">
-                <input type="date" id="dateFromFilter" class="date-input" value="<?php echo htmlspecialchars($date_from); ?>" aria-label="Filter by Start Date" max="2025-07-03">
-                <input type="date" id="dateToFilter" class="date-input" value="<?php echo htmlspecialchars($date_to); ?>" aria-label="Filter by End Date" max="2025-07-03">
+                <input type="date" id="dateFromFilter" class="date-input" value="<?php echo htmlspecialchars($date_from); ?>" aria-label="Filter by Start Date" max="2025-07-07">
+                <input type="date" id="dateToFilter" class="date-input" value="<?php echo htmlspecialchars($date_to); ?>" aria-label="Filter by End Date" max="2025-07-07">
                 <button id="applyFilters" class="btn btn-primary btn-custom" title="Apply Filters" aria-label="Apply Filters"><i class="fas fa-filter"></i> Apply</button>
                 <button id="clearFilters" class="btn btn-secondary btn-custom" title="Clear Filters" aria-label="Clear Filters"><i class="fas fa-times"></i> Clear</button>
                 <button id="exportCsv" class="btn btn-success btn-custom" title="Export to CSV" aria-label="Export Citations to CSV"><i class="fas fa-file-csv"></i> Export CSV</button>
@@ -917,486 +914,517 @@ $conn = null;
           };
         };
 
+        // Function to print receipt
+        const printReceipt = (citationId, amount) => {
+            console.log(`Printing receipt for citation ${citationId} with amount ₱${amount}`);
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = 'print_receipt.php';
+            form.target = '_blank';
+
+            function add(name, value) {
+                const inp = document.createElement('input');
+                inp.type = 'hidden';
+                inp.name = name;
+                inp.value = value;
+                form.appendChild(inp);
+            }
+
+            const today = new Date().toISOString().slice(0,10);
+            add('date', today);
+            add('citation_id', citationId);
+            add('amount1', amount.toFixed(2));
+            add('amount2', '');
+            add('amount_in_words', '');
+            add('received[]', 'Cash');
+
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
+        };
+
         // Fetch citations
-const fetchCitations = (page = currentPage, append = false) => {
-    if (isLoading) return;
-    isLoading = true;
-    elements.filterError.style.display = 'none';
-    elements.loading.style.display = 'flex';
-    if (!append) elements.citationTable.innerHTML = '';
+        const fetchCitations = (page = currentPage, append = false) => {
+            if (isLoading) return;
+            isLoading = true;
+            elements.filterError.style.display = 'none';
+            elements.loading.style.display = 'flex';
+            if (!append) elements.citationTable.innerHTML = '';
 
-    // Validate filter inputs
-    if (elements.dateFromFilter.value && !elements.dateToFilter.value || !elements.dateFromFilter.value && elements.dateToFilter.value) {
-        elements.filterError.textContent = 'Please provide both start and end dates or neither.';
-        elements.filterError.style.display = 'block';
-        elements.loading.style.display = 'none';
-        isLoading = false;
-        elements.filterError.scrollIntoView({ behavior: 'smooth' });
-        return;
-    }
-    if (elements.dateFromFilter.value && elements.dateToFilter.value && new Date(elements.dateFromFilter.value) > new Date(elements.dateToFilter.value)) {
-        elements.filterError.textContent = 'Start date cannot be after end date.';
-        elements.filterError.style.display = 'block';
-        elements.loading.style.display = 'none';
-        isLoading = false;
-        elements.filterError.scrollIntoView({ behavior: 'smooth' });
-        return;
-    }
+            // Validate filter inputs
+            if (elements.dateFromFilter.value && !elements.dateToFilter.value || !elements.dateFromFilter.value && elements.dateToFilter.value) {
+                elements.filterError.textContent = 'Please provide both start and end dates or neither.';
+                elements.filterError.style.display = 'block';
+                elements.loading.style.display = 'none';
+                isLoading = false;
+                elements.filterError.scrollIntoView({ behavior: 'smooth' });
+                return;
+            }
+            if (elements.dateFromFilter.value && elements.dateToFilter.value && new Date(elements.dateFromFilter.value) > new Date(elements.dateToFilter.value)) {
+                elements.filterError.textContent = 'Start date cannot be after end date.';
+                elements.filterError.style.display = 'block';
+                elements.loading.style.display = 'none';
+                isLoading = false;
+                elements.filterError.scrollIntoView({ behavior: 'smooth' });
+                return;
+            }
 
-    const params = new URLSearchParams({
-        page: page,
-        records_per_page: elements.recordsPerPage.value,
-        payment_status: elements.paymentStatusFilter.value,
-        sort: elements.sortFilter.value,
-        search: elements.searchFilter.value.trim(),
-        date_from: elements.dateFromFilter.value,
-        date_to: elements.dateToFilter.value,
-        csrf_token: csrfToken
-    });
+            const params = new URLSearchParams({
+                page: page,
+                records_per_page: elements.recordsPerPage.value,
+                payment_status: elements.paymentStatusFilter.value,
+                sort: elements.sortFilter.value,
+                search: elements.searchFilter.value.trim(),
+                date_from: elements.dateFromFilter.value,
+                date_to: elements.dateToFilter.value,
+                csrf_token: csrfToken
+            });
 
-    fetch(`fetch_payments.php?${params.toString()}`, { cache: 'no-store' })
-        .then(response => {
-            if (!response.ok) {
-                return response.text().then(text => {
-                    throw new Error(`HTTP error: ${response.status}, Response: ${text}`);
+            fetch(`fetch_payments.php?${params.toString()}`, { cache: 'no-store' })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.text().then(text => {
+                            throw new Error(`HTTP error: ${response.status}, Response: ${text}`);
+                        });
+                    }
+                    const contentType = response.headers.get('content-type');
+                    if (!contentType || !contentType.includes('application/json')) {
+                        throw new Error(`Unexpected content type: ${contentType || 'unknown'}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    elements.loading.style.display = 'none';
+                    isLoading = false;
+                    if (data.error) {
+                        elements.citationTable.innerHTML = `<tr><td colspan="14" class="empty-state">${data.error}</td></tr>`;
+                        console.error('Fetch error:', data.error);
+                    } else {
+                        if (data.html && data.rows && data.rows.length) {
+                            const recordsPerPage = parseInt(elements.recordsPerPage.value);
+                            const startRow = (page - 1) * recordsPerPage + 1;
+                            let rowNumber = startRow;
+                            const modifiedHtml = data.rows.map(row => {
+                                const rowHtml = data.html.split('<tr>').slice(1).find(tr => tr.includes(row.ticket_number));
+                                return `<tr><td>${rowNumber++}</td>${rowHtml}`;
+                            }).join('');
+                            elements.citationTable.insertAdjacentHTML(append ? 'beforeend' : 'afterbegin', modifiedHtml);
+                        } else {
+                            elements.citationTable.innerHTML = '<tr><td colspan="14" class="empty-state"><i class="fas fa-info-circle"></i> No citations found for the selected filters.</td></tr>';
+                        }
+                        totalRecords = data.totalRecords || 0;
+                        totalPages = Math.ceil(totalRecords / parseInt(elements.recordsPerPage.value));
+                        attachEventListeners();
+                        updatePagination(page);
+                    }
+                })
+                .catch(error => {
+                    elements.loading.style.display = 'none';
+                    isLoading = false;
+                    elements.citationTable.innerHTML = `<tr><td colspan="14" class="empty-state">Error loading citations: ${error.message}</td></tr>`;
+                    elements.filterError.textContent = `Error loading citations: ${error.message}`;
+                    elements.filterError.style.display = 'block';
+                    console.error('Fetch citations error:', error);
                 });
-            }
-            const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-                throw new Error(`Unexpected content type: ${contentType || 'unknown'}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            elements.loading.style.display = 'none';
-            isLoading = false;
-            if (data.error) {
-                elements.citationTable.innerHTML = `<tr><td colspan="14" class="empty-state">${data.error}</td></tr>`;
-                console.error('Fetch error:', data.error);
-            } else {
-                if (data.html && data.rows && data.rows.length) {
-                    const recordsPerPage = parseInt(elements.recordsPerPage.value);
-                    const startRow = (page - 1) * recordsPerPage + 1;
-                    let rowNumber = startRow;
-                    const modifiedHtml = data.rows.map(row => {
-                        const rowHtml = data.html.split('<tr>').slice(1).find(tr => tr.includes(row.ticket_number));
-                        return `<tr><td>${rowNumber++}</td>${rowHtml}`;
-                    }).join('');
-                    elements.citationTable.insertAdjacentHTML(append ? 'beforeend' : 'afterbegin', modifiedHtml);
-                } else {
-                    elements.citationTable.innerHTML = '<tr><td colspan="14" class="empty-state"><i class="fas fa-info-circle"></i> No citations found for the selected filters.</td></tr>';
-                }
-                totalRecords = data.totalRecords || 0;
-                totalPages = Math.ceil(totalRecords / parseInt(elements.recordsPerPage.value));
-                attachEventListeners();
-                updatePagination(page);
-            }
-        })
-        .catch(error => {
-            elements.loading.style.display = 'none';
-            isLoading = false;
-            elements.citationTable.innerHTML = `<tr><td colspan="14" class="empty-state">Error loading citations: ${error.message}</td></tr>`;
-            elements.filterError.textContent = `Error loading citations: ${error.message}`;
-            elements.filterError.style.display = 'block';
-            console.error('Fetch citations error:', error);
-        });
-};
+        };
 
         // Update pagination
         const updatePagination = (current) => {
-          const recordsPerPage = parseInt(elements.recordsPerPage.value);
-          elements.showingStart.textContent = totalRecords > 0 ? ((current - 1) * recordsPerPage + 1) : 0;
-          elements.showingEnd.textContent = Math.min(current * recordsPerPage, totalRecords);
-          elements.totalRecords.textContent = totalRecords;
+            const recordsPerPage = parseInt(elements.recordsPerPage.value);
+            elements.showingStart.textContent = totalRecords > 0 ? ((current - 1) * recordsPerPage + 1) : 0;
+            elements.showingEnd.textContent = Math.min(current * recordsPerPage, totalRecords);
+            elements.totalRecords.textContent = totalRecords;
 
-          elements.pagination.innerHTML = '';
-          const maxPagesToShow = 5;
-          const half = Math.floor(maxPagesToShow / 2);
-          let startPage = Math.max(1, current - half);
-          let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+            elements.pagination.innerHTML = '';
+            const maxPagesToShow = 5;
+            const half = Math.floor(maxPagesToShow / 2);
+            let startPage = Math.max(1, current - half);
+            let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
 
-          if (endPage - startPage < maxPagesToShow - 1) {
-            startPage = Math.max(1, endPage - maxPagesToShow + 1);
-          }
+            if (endPage - startPage < maxPagesToShow - 1) {
+                startPage = Math.max(1, endPage - maxPagesToShow + 1);
+            }
 
-          if (current > 1) {
-            const prevLi = document.createElement('li');
-            prevLi.className = 'page-item';
-            prevLi.innerHTML = '<a class="page-link" href="#" aria-label="Previous Page">Previous</a>';
-            prevLi.addEventListener('click', (e) => {
-              e.preventDefault();
-              if (currentPage > 1) {
-                currentPage--;
-                fetchCitations(currentPage);
-              }
-            });
-            elements.pagination.appendChild(prevLi);
-          }
+            if (current > 1) {
+                const prevLi = document.createElement('li');
+                prevLi.className = 'page-item';
+                prevLi.innerHTML = '<a class="page-link" href="#" aria-label="Previous Page">Previous</a>';
+                prevLi.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (currentPage > 1) {
+                        currentPage--;
+                        fetchCitations(currentPage);
+                    }
+                });
+                elements.pagination.appendChild(prevLi);
+            }
 
-          for (let i = startPage; i <= endPage; i++) {
-            const li = document.createElement('li');
-            li.className = `page-item ${i === current ? 'active' : ''}`;
-            li.innerHTML = `<a class="page-link" href="#">${i}</a>`;
-            li.addEventListener('click', (e) => {
-              e.preventDefault();
-              currentPage = i;
-              fetchCitations(i);
-            });
-            elements.pagination.appendChild(li);
-          }
+            for (let i = startPage; i <= endPage; i++) {
+                const li = document.createElement('li');
+                li.className = `page-item ${i === current ? 'active' : ''}`;
+                li.innerHTML = `<a class="page-link" href="#">${i}</a>`;
+                li.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    currentPage = i;
+                    fetchCitations(i);
+                });
+                elements.pagination.appendChild(li);
+            }
 
-          if (current < totalPages) {
-            const nextLi = document.createElement('li');
-            nextLi.className = 'page-item';
-            nextLi.innerHTML = '<a class="page-link" href="#" aria-label="Next Page">Next</a>';
-            nextLi.addEventListener('click', (e) => {
-              e.preventDefault();
-              if (currentPage < totalPages) {
-                currentPage++;
-                fetchCitations(currentPage);
-              }
-            });
-            elements.pagination.appendChild(nextLi);
-          }
+            if (current < totalPages) {
+                const nextLi = document.createElement('li');
+                nextLi.className = 'page-item';
+                nextLi.innerHTML = '<a class="page-link" href="#" aria-label="Next Page">Next</a>';
+                nextLi.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (currentPage < totalPages) {
+                        currentPage++;
+                        fetchCitations(currentPage);
+                    }
+                });
+                elements.pagination.appendChild(nextLi);
+            }
         };
 
         // Attach event listeners to table rows
         const attachEventListeners = () => {
-          document.querySelectorAll('.driver-link').forEach(link => {
-            link.addEventListener('click', (e) => {
-              e.preventDefault();
-              const driverId = link.dataset.driverId;
-              elements.driverLicense.textContent = link.dataset.licenseNumber || 'N/A';
-              elements.driverName.textContent = link.textContent;
-              elements.driverAddress.textContent = [
-                link.dataset.zone || '',
-                link.dataset.barangay || '',
-                link.dataset.municipality || '',
-                link.dataset.province || ''
-              ].filter(Boolean).join(', ') || 'N/A';
-              fetchDriverOffenses(driverId);
-              elements.driverModal.show();
+            document.querySelectorAll('.driver-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const driverId = link.dataset.driverId;
+                    elements.driverLicense.textContent = link.dataset.licenseNumber || 'N/A';
+                    elements.driverName.textContent = link.textContent;
+                    elements.driverAddress.textContent = [
+                        link.dataset.zone || '',
+                        link.dataset.barangay || '',
+                        link.dataset.municipality || '',
+                        link.dataset.province || ''
+                    ].filter(Boolean).join(', ') || 'N/A';
+                    fetchDriverOffenses(driverId);
+                    elements.driverModal.show();
+                });
             });
-          });
 
-          document.querySelectorAll('.pay-now').forEach(button => {
-            button.addEventListener('click', (e) => {
-              e.preventDefault();
-              const citationId = button.dataset.citationId;
-              const driverId = button.dataset.driverId;
-              elements.paymentLicense.textContent = button.dataset.licenseNumber || 'N/A';
-              elements.paymentName.textContent = button.closest('tr').querySelector('.driver-link').textContent;
-              elements.paymentAddress.textContent = [
-                button.dataset.zone || '',
-                button.dataset.barangay || '',
-                button.dataset.municipality || '',
-                button.dataset.province || ''
-              ].filter(Boolean).join(', ') || 'N/A';
-              fetchPaymentOffenses(citationId, driverId);
-              elements.paymentModal.show();
+            document.querySelectorAll('.pay-now').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const citationId = button.dataset.citationId;
+                    const driverId = button.dataset.driverId;
+                    elements.paymentLicense.textContent = button.dataset.licenseNumber || 'N/A';
+                    elements.paymentName.textContent = button.closest('tr').querySelector('.driver-link').textContent;
+                    elements.paymentAddress.textContent = [
+                        button.dataset.zone || '',
+                        button.dataset.barangay || '',
+                        button.dataset.municipality || '',
+                        button.dataset.province || ''
+                    ].filter(Boolean).join(', ') || 'N/A';
+                    fetchPaymentOffenses(citationId, driverId);
+                    elements.paymentModal.show();
+                });
             });
-          });
         };
 
         // Fetch driver offenses
-      const fetchDriverOffenses = (driverId) => {
-    elements.loading.style.display = 'flex';
-    elements.driverOffenses.innerHTML = '';
-    console.log(`Fetching offenses for driverId: ${driverId}`);
-    
-    fetch(`get_driver_info.php?driver_id=${encodeURIComponent(driverId)}&csrf_token=${encodeURIComponent(csrfToken)}`, { 
-        headers: { 'Accept': 'application/json' },
-        cache: 'no-store'
-    })
-        .then(response => {
-            if (!response.ok) {
-                return response.text().then(text => {
-                    throw new Error(`HTTP error: ${response.status}, Response: ${text}`);
+        const fetchDriverOffenses = (driverId) => {
+            elements.loading.style.display = 'flex';
+            elements.driverOffenses.innerHTML = '';
+            console.log(`Fetching offenses for driverId: ${driverId}`);
+            
+            fetch(`get_driver_info.php?driver_id=${encodeURIComponent(driverId)}&csrf_token=${encodeURIComponent(csrfToken)}`, { 
+                headers: { 'Accept': 'application/json' },
+                cache: 'no-store'
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.text().then(text => {
+                            throw new Error(`HTTP error: ${response.status}, Response: ${text}`);
+                        });
+                    }
+                    const contentType = response.headers.get('content-type');
+                    if (!contentType || !contentType.includes('application/json')) {
+                        throw new Error(`Unexpected content type: ${contentType || 'unknown'}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    elements.loading.style.display = 'none';
+                    let totalFines = 0;
+
+                    if (data.error) {
+                        elements.driverOffenses.innerHTML = `<tr><td colspan="4" class="empty-state">Error: ${data.error}</td></tr>`;
+                        console.error('Fetch driver offenses error:', data.error);
+                        return;
+                    }
+
+                    if (!data || !Array.isArray(data) || data.length === 0) {
+                        elements.driverOffenses.innerHTML = '<tr><td colspan="4" class="empty-state"><i class="fas fa-info-circle"></i> No offenses found for this driver.</td></tr>';
+                        elements.driverTotalFines.textContent = '₱0.00';
+                        return;
+                    }
+
+                    data.forEach(offense => {
+                        const fine = parseFloat(offense.fine) || 0;
+                        totalFines += fine;
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${offense.apprehension_datetime || 'N/A'}</td>
+                            <td>${offense.violation_type || 'Unknown'}</td>
+                            <td>₱${fine.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                            <td>${offense.violation_payment_status || 'Unpaid'}</td>
+                        `;
+                        elements.driverOffenses.appendChild(row);
+                    });
+                    elements.driverTotalFines.textContent = `₱${totalFines.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+                })
+                .catch(error => {
+                    elements.loading.style.display = 'none';
+                    elements.driverOffenses.innerHTML = `<tr><td colspan="4" class="empty-state">Error loading offenses: ${error.message}</td></tr>`;
+                    elements.driverTotalFines.textContent = '₱0.00';
+                    console.error('Fetch driver offenses error:', error);
                 });
-            }
-            const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-                throw new Error(`Unexpected content type: ${contentType || 'unknown'}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            elements.loading.style.display = 'none';
-            let totalFines = 0;
-
-            if (data.error) {
-                elements.driverOffenses.innerHTML = `<tr><td colspan="4" class="empty-state">Error: ${data.error}</td></tr>`;
-                console.error('Fetch driver offenses error:', data.error);
-                return;
-            }
-
-            if (!data || !Array.isArray(data) || data.length === 0) {
-                elements.driverOffenses.innerHTML = '<tr><td colspan="4" class="empty-state"><i class="fas fa-info-circle"></i> No offenses found for this driver.</td></tr>';
-                elements.driverTotalFines.textContent = '₱0.00';
-                return;
-            }
-
-            data.forEach(offense => {
-                const fine = parseFloat(offense.fine) || 0;
-                totalFines += fine;
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${offense.apprehension_datetime || 'N/A'}</td>
-                    <td>${offense.violation_type || 'Unknown'}</td>
-                    <td>₱${fine.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
-                    <td>${offense.violation_payment_status || 'Unpaid'}</td>
-                `;
-                elements.driverOffenses.appendChild(row);
-            });
-            elements.driverTotalFines.textContent = `₱${totalFines.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
-        })
-        .catch(error => {
-            elements.loading.style.display = 'none';
-            elements.driverOffenses.innerHTML = `<tr><td colspan="4" class="empty-state">Error loading offenses: ${error.message}</td></tr>`;
-            elements.driverTotalFines.textContent = '₱0.00';
-            console.error('Fetch driver offenses error:', error);
-        });
-};
+        };
 
         // Fetch payment offenses
         const fetchPaymentOffenses = (citationId, driverId) => {
-          elements.loading.style.display = 'flex';
-          fetch(`fetch_payments.php?citation_id=${citationId}&driver_id=${driverId}&csrf_token=${csrfToken}`, { cache: 'no-store' })
-            .then(response => {
-              if (!response.ok) {
-                return response.text().then(text => {
-                  throw new Error(`HTTP error: ${response.status}, Response: ${text}`);
+            elements.loading.style.display = 'flex';
+            fetch(`fetch_payments.php?citation_id=${citationId}&driver_id=${driverId}&csrf_token=${csrfToken}`, { cache: 'no-store' })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.text().then(text => {
+                            throw new Error(`HTTP error: ${response.status}, Response: ${text}`);
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    elements.paymentOffenses.innerHTML = '';
+                    let totalFines = 0;
+                    let unpaidFines = 0;
+                    if (data.error) {
+                        elements.paymentOffenses.innerHTML = `<tr><td colspan="5" class="empty-state">${data.error}</td></tr>`;
+                    } else if (!data.offenses || !data.offenses.length) {
+                        elements.paymentOffenses.innerHTML = `<tr><td colspan="5" class="empty-state">No payment data found for citation ${citationId}</td></tr>`;
+                    } else {
+                        data.offenses.forEach(offense => {
+                            const fine = parseFloat(offense.fine) || 0;
+                            totalFines += fine;
+                            const isPaid = offense.payment_status === 'Paid';
+                            if (!isPaid) unpaidFines += fine;
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td><input type="checkbox" class="violation-checkbox" data-violation-id="${offense.violation_id}" data-fine="${fine}" ${isPaid ? 'disabled' : 'checked'}></td>
+                                <td>${offense.date || 'N/A'}</td>
+                                <td>${offense.violation_type || 'Unknown'} ${offense.offense_count ? '(Offense ' + offense.offense_count + ')' : ''}</td>
+                                <td>₱${fine.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                                <td>${isPaid ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>'}</td>
+                            `;
+                            elements.paymentOffenses.appendChild(row);
+                        });
+                        elements.paymentTotalFines.textContent = `₱${totalFines.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+                        elements.amountDue.textContent = `₱${unpaidFines.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+                        elements.paymentAmount.value = unpaidFines.toFixed(2);
+                        elements.changeAmount.textContent = '₱0.00';
+                        attachViolationListeners(citationId);
+                    }
+                    elements.loading.style.display = 'none';
+                })
+                .catch(error => {
+                    elements.paymentOffenses.innerHTML = `<tr><td colspan="5" class="empty-state">Error loading payment data: ${error.message}</td></tr>`;
+                    elements.loading.style.display = 'none';
+                    console.error('Fetch payment offenses error:', error);
                 });
-              }
-              return response.json();
-            })
-            .then(data => {
-              elements.paymentOffenses.innerHTML = '';
-              let totalFines = 0;
-              let unpaidFines = 0;
-              if (data.error) {
-                elements.paymentOffenses.innerHTML = `<tr><td colspan="5" class="empty-state">${data.error}</td></tr>`;
-              } else if (!data.offenses || !data.offenses.length) {
-                elements.paymentOffenses.innerHTML = `<tr><td colspan="5" class="empty-state">No payment data found for citation ${citationId}</td></tr>`;
-              } else {
-                data.offenses.forEach(offense => {
-                  const fine = parseFloat(offense.fine) || 0;
-                  totalFines += fine;
-                  const isPaid = offense.payment_status === 'Paid';
-                  if (!isPaid) unpaidFines += fine;
-                  const row = document.createElement('tr');
-                  row.innerHTML = `
-                    <td><input type="checkbox" class="violation-checkbox" data-violation-id="${offense.violation_id}" data-fine="${fine}" ${isPaid ? 'disabled' : 'checked'}></td>
-                    <td>${offense.date || 'N/A'}</td>
-                    <td>${offense.violation_type || 'Unknown'} ${offense.offense_count ? '(Offense ' + offense.offense_count + ')' : ''}</td>
-                    <td>₱${fine.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
-                    <td>${isPaid ? '<span class="badge bg-success">Paid</span>' : '<span class="badge bg-danger">Unpaid</span>'}</td>
-                  `;
-                  elements.paymentOffenses.appendChild(row);
-                });
-                elements.paymentTotalFines.textContent = `₱${totalFines.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
-                elements.amountDue.textContent = `₱${unpaidFines.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
-                elements.paymentAmount.value = unpaidFines.toFixed(2);
-                elements.changeAmount.textContent = '₱0.00';
-                attachViolationListeners(citationId);
-              }
-              elements.loading.style.display = 'none';
-            })
-            .catch(error => {
-              elements.paymentOffenses.innerHTML = `<tr><td colspan="5" class="empty-state">Error loading payment data: ${error.message}</td></tr>`;
-              elements.loading.style.display = 'none';
-              console.error('Fetch payment offenses error:', error);
-            });
         };
 
         // Attach listeners to violation checkboxes
         const attachViolationListeners = (citationId) => {
-          const checkboxes = document.querySelectorAll('.violation-checkbox');
-          checkboxes.forEach(checkbox => {
-            checkbox.addEventListener('change', () => {
-              let totalFines = 0;
-              checkboxes.forEach(cb => {
-                if (cb.checked) {
-                  totalFines += parseFloat(cb.dataset.fine) || 0;
+            const checkboxes = document.querySelectorAll('.violation-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', () => {
+                    let totalFines = 0;
+                    checkboxes.forEach(cb => {
+                        if (cb.checked) {
+                            totalFines += parseFloat(cb.dataset.fine) || 0;
+                        }
+                    });
+                    elements.amountDue.textContent = `₱${totalFines.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+                    elements.paymentAmount.value = totalFines.toFixed(2);
+                    const amount = parseFloat(elements.paymentAmount.value) || 0;
+                    const change = amount - totalFines;
+                    elements.changeAmount.textContent = `₱${change.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+                    elements.paymentError.style.display = change < 0 ? 'block' : 'none';
+                });
+            });
+
+            elements.paymentAmount.addEventListener('input', () => {
+                const amount = parseFloat(elements.paymentAmount.value) || 0;
+                const due = parseFloat(elements.amountDue.textContent.replace('₱', '').replace(',', '')) || 0;
+                const change = amount - due;
+                elements.changeAmount.textContent = `₱${change.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+                elements.paymentError.style.display = change < 0 ? 'block' : 'none';
+            });
+
+            elements.confirmPayment.onclick = () => {
+                const selectedViolations = Array.from(document.querySelectorAll('.violation-checkbox'))
+                    .filter(cb => cb.checked)
+                    .map(cb => cb.dataset.violationId);
+                if (!selectedViolations.length) {
+                    elements.paymentError.textContent = 'Please select at least one violation to pay.';
+                    elements.paymentError.style.display = 'block';
+                    return;
                 }
-              });
-              elements.amountDue.textContent = `₱${totalFines.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
-              elements.paymentAmount.value = totalFines.toFixed(2);
-              const amount = parseFloat(elements.paymentAmount.value) || 0;
-              const change = amount - totalFines;
-              elements.changeAmount.textContent = `₱${change.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
-              elements.paymentError.style.display = change < 0 ? 'block' : 'none';
-            });
-          });
+                
+                const amount = parseFloat(elements.paymentAmount.value) || 0;
+                const due = parseFloat(elements.amountDue.textContent.replace('₱', '').replace(',', '')) || 0;
+                if (amount < due) {
+                    elements.paymentError.textContent = 'Payment amount must be at least the amount due.';
+                    elements.paymentError.style.display = 'block';
+                    return;
+                }
 
-          elements.paymentAmount.addEventListener('input', () => {
-            const amount = parseFloat(elements.paymentAmount.value) || 0;
-            const due = parseFloat(elements.amountDue.textContent.replace('₱', '').replace(',', '')) || 0;
-            const change = amount - due;
-            elements.changeAmount.textContent = `₱${change.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
-            elements.paymentError.style.display = change < 0 ? 'block' : 'none';
-          });
+                const formData = new FormData();
+                formData.append('citation_id', citationId);
+                formData.append('amount', amount.toFixed(2));
+                formData.append('csrf_token', csrfToken);
+                selectedViolations.forEach(id => formData.append('violation_ids[]', id));
 
-          elements.confirmPayment.onclick = () => {
-            const selectedViolations = Array.from(document.querySelectorAll('.violation-checkbox'))
-              .filter(cb => cb.checked)
-              .map(cb => cb.dataset.violationId);
-            if (!selectedViolations.length) {
-              elements.paymentError.textContent = 'Please select at least one violation to pay.';
-              elements.paymentError.style.display = 'block';
-              return;
-            }
-            const amount = parseFloat(elements.paymentAmount.value) || 0;
-            const due = parseFloat(elements.amountDue.textContent.replace('₱', '').replace(',', '')) || 0;
-            if (amount < due) {
-              elements.paymentError.textContent = 'Payment amount must be at least the amount due.';
-              elements.paymentError.style.display = 'block';
-              return;
-            }
-
-            const formData = new FormData();
-            formData.append('citation_id', citationId);
-            formData.append('amount', amount.toFixed(2));
-            formData.append('csrf_token', csrfToken);
-            selectedViolations.forEach(id => formData.append('violation_ids[]', id));
-
-            fetch('pay_citation.php', {
-              method: 'POST',
-              body: formData
-            })
-            .then(response => {
-              if (!response.ok) throw new Error('Network error');
-              return response.json();
-            })
-            .then(data => {
-              if (data.status === 'success') {
-                alert(data.message);
-                elements.paymentModal.hide();
-                fetchCitations();
-              } else {
-                elements.paymentError.textContent = data.message;
-                elements.paymentError.style.display = 'block';
-              }
-            })
-            .catch(error => {
-              elements.paymentError.textContent = 'Error processing payment: ' + error.message;
-              elements.paymentError.style.display = 'block';
-              console.error('Payment error:', error);
-            });
-          };
+                fetch('pay_citation.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error('Network error');
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert(data.message);
+                        elements.paymentModal.hide();
+                        printReceipt(citationId, amount);
+                        fetchCitations();
+                    } else {
+                        elements.paymentError.textContent = data.message;
+                        elements.paymentError.style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    elements.paymentError.textContent = 'Error processing payment: ' + error.message;
+                    elements.paymentError.style.display = 'block';
+                    console.error('Payment error:', error);
+                });
+            };
         };
 
         // Clear filters
         elements.clearFilters.addEventListener('click', () => {
-          elements.paymentStatusFilter.value = 'All';
-          elements.sortFilter.value = 'apprehension_desc';
-          elements.recordsPerPage.value = '20';
-          elements.searchFilter.value = '';
-          elements.dateFromFilter.value = '';
-          elements.dateToFilter.value = '';
-          currentPage = 1;
-          fetchCitations();
+            elements.paymentStatusFilter.value = 'All';
+            elements.sortFilter.value = 'apprehension_desc';
+            elements.recordsPerPage.value = '20';
+            elements.searchFilter.value = '';
+            elements.dateFromFilter.value = '';
+            elements.dateToFilter.value = '';
+            currentPage = 1;
+            fetchCitations();
         });
 
         // Debounced search input
         elements.searchFilter.addEventListener('input', debounce(() => {
-          currentPage = 1;
-          fetchCitations();
+            currentPage = 1;
+            fetchCitations();
         }, 500));
 
         // Apply filters
         elements.applyFilters.addEventListener('click', () => {
-          currentPage = 1;
-          fetchCitations();
+            currentPage = 1;
+            fetchCitations();
         });
 
         // Records per page change
         elements.recordsPerPage.addEventListener('change', () => {
-          currentPage = 1;
-          fetchCitations();
+            currentPage = 1;
+            fetchCitations();
         });
 
         // Export CSV
         elements.exportCsv.addEventListener('click', () => {
-          const params = new URLSearchParams({
-            payment_status: elements.paymentStatusFilter.value,
-            search: elements.searchFilter.value.trim(),
-            date_from: elements.dateFromFilter.value,
-            date_to: elements.dateToFilter.value,
-            csrf_token: csrfToken
-          });
-          fetch(`fetch_payments.php?${params.toString()}`, { cache: 'no-store' })
-            .then(response => {
-              if (!response.ok) throw new Error('Network error');
-              return response.json();
-            })
-            .then(data => {
-              const csv = ['Ticket #,Driver,License #,Plate #,Vehicle Type,Apprehension Date,Violations,Total Fine,Payment Status,Payment Amount,Payment Date,Reference #'];
-              if (data.rows && data.rows.length) {
-                data.rows.forEach(row => {
-                  csv.push([
-                    `"${row.ticket_number || ''}"`,
-                    `"${row.driver_name || ''}"`,
-                    `"${row.license_number || ''}"`,
-                    `"${row.plate_mv_engine_chassis_no || ''}"`,
-                    `"${row.vehicle_type || ''}"`,
-                    `"${row.apprehension_datetime ? new Date(row.apprehension_datetime).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : 'N/A'}"`,
-                    `"${row.violations || 'None'}"`,
-                    `"₱${Number(row.total_fine || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}"`,
-                    `"${row.payment_status || 'Unpaid'}"`,
-                    `"${row.payment_amount ? '₱' + Number(row.payment_amount).toLocaleString('en-PH', { minimumFractionDigits: 2 }) : 'N/A'}"`,
-                    `"${row.payment_date ? new Date(row.payment_date).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : 'N/A'}"`,
-                    `"${row.reference_number || 'N/A'}"`
-                  ].join(','));
-                });
-              }
-              const bom = '\uFEFF';
-              const blob = new Blob([bom + csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
-              const link = document.createElement('a');
-              link.href = URL.createObjectURL(blob);
-              link.download = `citations_${new Date().toISOString().slice(0, 10)}.csv`;
-              link.click();
-            })
-            .catch(error => {
-              elements.filterError.textContent = `Error exporting CSV: ${error.message}`;
-              elements.filterError.style.display = 'block';
-              console.error('Export CSV error:', error);
+            const params = new URLSearchParams({
+                payment_status: elements.paymentStatusFilter.value,
+                search: elements.searchFilter.value.trim(),
+                date_from: elements.dateFromFilter.value,
+                date_to: elements.dateToFilter.value,
+                csrf_token: csrfToken
             });
+            fetch(`fetch_payments.php?${params.toString()}`, { cache: 'no-store' })
+                .then(response => {
+                    if (!response.ok) throw new Error('Network error');
+                    return response.json();
+                })
+                .then(data => {
+                    const csv = ['Ticket #,Driver,License #,Plate #,Vehicle Type,Apprehension Date,Violations,Total Fine,Payment Status,Payment Amount,Payment Date,Reference #'];
+                    if (data.rows && data.rows.length) {
+                        data.rows.forEach(row => {
+                            csv.push([
+                                `"${row.ticket_number || ''}"`,
+                                `"${row.driver_name || ''}"`,
+                                `"${row.license_number || ''}"`,
+                                `"${row.plate_mv_engine_chassis_no || ''}"`,
+                                `"${row.vehicle_type || ''}"`,
+                                `"${row.apprehension_datetime ? new Date(row.apprehension_datetime).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : 'N/A'}"`,
+                                `"${row.violations || 'None'}"`,
+                                `"₱${Number(row.total_fine || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}"`,
+                                `"${row.payment_status || 'Unpaid'}"`,
+                                `"${row.payment_amount ? '₱' + Number(row.payment_amount).toLocaleString('en-PH', { minimumFractionDigits: 2 }) : 'N/A'}"`,
+                                `"${row.payment_date ? new Date(row.payment_date).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : 'N/A'}"`,
+                                `"${row.reference_number || 'N/A'}"`
+                            ].join(','));
+                        });
+                    }
+                    const bom = '\uFEFF';
+                    const blob = new Blob([bom + csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = `citations_${new Date().toISOString().slice(0, 10)}.csv`;
+                    link.click();
+                })
+                .catch(error => {
+                    elements.filterError.textContent = `Error exporting CSV: ${error.message}`;
+                    elements.filterError.style.display = 'block';
+                    console.error('Export CSV error:', error);
+                });
         });
 
         // Lazy loading with IntersectionObserver
         const observer = new IntersectionObserver((entries) => {
-          if (entries[0].isIntersecting && currentPage < totalPages && !isLoading) {
-            currentPage++;
-            fetchCitations(currentPage, true);
-          }
+            if (entries[0].isIntersecting && currentPage < totalPages && !isLoading) {
+                currentPage++;
+                fetchCitations(currentPage, true);
+            }
         }, { threshold: 0.1 });
 
         observer.observe(elements.lazyLoadTrigger);
 
         // Print modal
         window.printModal = (modalId) => {
-          const modal = document.getElementById(modalId);
-          const modalContent = modal.querySelector('.modal-content').outerHTML;
-          const printWindow = window.open('', '', 'width=800,height=600');
-          printWindow.document.write(`
-            <html>
-              <head>
-                <title>Print</title>
-                <style>
-                  body { font-family: 'Roboto', sans-serif; padding: 20px; }
-                  .modal-content { max-width: 600px; margin: auto; }
-                  .modal-header, .modal-footer { background-color: #1e40af; color: white; }
-                  table { width: 100%; border-collapse: collapse; }
-                  th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; }
-                  th { background-color: #f1f5f9; }
-                </style>
-              </head>
-              <body>${modalContent}</body>
-            </html>
-          `);
-          printWindow.document.close();
-          printWindow.print();
+            const modal = document.getElementById(modalId);
+            const modalContent = modal.querySelector('.modal-content').outerHTML;
+            const printWindow = window.open('', '', 'width=800,height=600');
+            printWindow.document.write(`
+                <html>
+                    <head>
+                        <title>Print</title>
+                        <style>
+                            body { font-family: 'Roboto', sans-serif; padding: 20px; }
+                            .modal-content { max-width: 600px; margin: auto; }
+                            .modal-header, .modal-footer { background-color: #1e40af; color: white; }
+                            table { width: 100%; border-collapse: collapse; }
+                            th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; }
+                            th { background-color: #f1f5f9; }
+                        </style>
+                    </head>
+                    <body>${modalContent}</body>
+                </html>
+            `);
+            printWindow.document.close();
+            printWindow.print();
         };
 
         // Initial load

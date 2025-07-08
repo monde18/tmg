@@ -1,0 +1,83 @@
+{
+    "folder-color.pathColors": [
+        {
+            "folderPath": "tmg\\fetch_citations.php\\",
+            "color": "foldercolorizer.color_cc6600",
+            "badge": "BE"
+        },
+        {
+            "folderPath": "tmg\\dashboard.php\\",
+            "badge": "FR",
+            "color": "foldercolorizer.color_000066"
+        },
+        {
+            "folderPath": "tmg\\driver_records.php\\",
+            "badge": "FB"
+        },
+        {
+            "folderPath": "tmg\\edit_citation.php\\",
+            "badge": "FB"
+        },
+        {
+            "folderPath": "tmg\\config.php\\",
+            "badge": "😀",
+            "color": "foldercolorizer.color_3300ff"
+        },
+        {
+            "folderPath": "tmg\\csrf.log\\",
+            "badge": "BE"
+        },
+        {
+            "folderPath": "tmg\\fetch_driver_offenses.php\\",
+            "badge": "BE"
+        },
+        {
+            "folderPath": "tmg\\fetch_payments.php\\",
+            "badge": "BE"
+        },
+        {
+            "folderPath": "tmg\\fetch_reports.php\\",
+            "badge": "BE"
+        },
+        {
+            "folderPath": "tmg\\filter_citations.php\\",
+            "badge": "BE"
+        },
+        {
+            "folderPath": "tmg\\get_driver_info.php\\",
+            "badge": "BE"
+        },
+        {
+            "folderPath": "tmg\\get_offense_records.php\\",
+            "badge": "BE"
+        },
+        {
+            "folderPath": "tmg\\index.php\\",
+            "badge": "FB"
+        },
+        {
+            "folderPath": "tmg\\insert_citation.php\\",
+            "badge": "BE"
+        },
+        {
+            "folderPath": "tmg\\pay_citation.php\\",
+            "badge": "BE"
+        },
+        {
+            "folderPath": "tmg\\update_citation.php\\",
+            "badge": "BE"
+        },
+        {
+            "folderPath": "tmg\\reports.php\\",
+            "badge": "FR"
+        },
+        {
+            "folderPath": "tmg\\records.php\\",
+            "badge": "FB"
+        },
+        {
+            "folderPath": "tmg\\process_payment.php\\",
+            "badge": "BE"
+        }
+    ]
+}

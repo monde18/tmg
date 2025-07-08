@@ -111,3 +111,115 @@ Received request: citation_id=372800, amount=300, violation_ids=Array
     [0] => 47
     [1] => 46
 )
+Received request: citation_id=372801, amount=150, violation_ids=Array
+(
+    [0] => 49
+)
+Received request: citation_id=372801, amount=150, violation_ids=Array
+(
+    [0] => 50
+)
+Received request: citation_id=372803, amount=300, violation_ids=Array
+(
+    [0] => 54
+    [1] => 53
+)
+Received request: citation_id=372802, amount=300, violation_ids=Array
+(
+    [0] => 52
+    [1] => 51
+)
+Received request: citation_id=372805, amount=150, violation_ids=Array
+(
+    [0] => 57
+)
+Received request: citation_id=372805, amount=150, violation_ids=Array
+(
+    [0] => 58
+)
+Received request: citation_id=372806, amount=300, violation_ids=Array
+(
+    [0] => 60
+    [1] => 59
+)
+Received request: citation_id=372804, amount=300, violation_ids=Array
+(
+    [0] => 56
+    [1] => 55
+)
+Received request: citation_id=372807, amount=300, violation_ids=Array
+(
+    [0] => 62
+    [1] => 61
+)
+Received request: citation_id=372808, amount=300, violation_ids=Array
+(
+    [0] => 64
+    [1] => 63
+)
+Received request: citation_id=372809, amount=300, violation_ids=Array
+(
+    [0] => 66
+    [1] => 65
+)
+Received request: citation_id=372810, amount=300, violation_ids=Array
+(
+    [0] => 68
+    [1] => 67
+)
+Received request: citation_id=372811, amount=300, violation_ids=Array
+(
+    [0] => 70
+    [1] => 69
+)
+Received request: citation_id=372812, amount=300, violation_ids=Array
+(
+    [0] => 72
+    [1] => 71
+)
+Received request: citation_id=372813, amount=300, violation_ids=Array
+(
+    [0] => 74
+    [1] => 73
+)
+Payment processing error: SQLSTATE[23000]: Integrity constraint violation: 1062 Duplicate entry 'PAY-20250708-0225-94' for key 'reference_number'Received request: citation_id=372813, amount=300, violation_ids=Array
+(
+    [0] => 74
+    [1] => 73
+)
+Payment processing error: SQLSTATE[23000]: Integrity constraint violation: 1062 Duplicate entry 'PAY-20250708-0225-94' for key 'reference_number'Received request: citation_id=372813, amount=300, violation_ids=Array
+(
+    [0] => 74
+    [1] => 73
+)
+Received request: citation_id=372814, amount=300, violation_ids=Array
+(
+    [0] => 76
+    [1] => 75
+)
+Received request: citation_id=372815, amount=300, violation_ids=Array
+(
+    [0] => 78
+    [1] => 77
+)
+Received request: citation_id=372816, amount=300, violation_ids=Array
+(
+    [0] => 80
+    [1] => 79
+)
+Received request: citation_id=372817, amount=300, violation_ids=Array
+(
+    [0] => 82
+    [1] => 81
+)
+Received request: citation_id=372818, amount=300, violation_ids=Array
+(
+    [0] => 84
+    [1] => 83
+)
+Received request: citation_id=372819, amount=500, violation_ids=Array
+(
+    [0] => 86
+    [1] => 85
+    [2] => 87
+)
